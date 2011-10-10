@@ -7,8 +7,9 @@ import random
 class BLB:
     known_reducers= ['mean', 'stdev']
     def __init__(self, num_subsamples=100, num_bootstraps=25, 
-                 subsample_len_exp=0.5):
+                 subsample_len_exp=0.5, with_cilk=False):
 
+        self.with_cilk=with_cilk
         self.pure_python = False
         for method in [ 'compute_estimate', 'reduce_bootstraps', 'average' ]:
             if not hasattr(self, method):
@@ -50,6 +51,8 @@ class BLB:
 
             
             impl_args ={}
+            impl_attributes={}
+            impl_args['attributes'] = impl_attributes
             if self.compute_estimate in BLB.known_reducers:
                 impl_args['use_classifier'] = self.compute_estimate
             else:
@@ -65,6 +68,8 @@ class BLB:
             else:
                 impl_args['subsample_reducer'] = self.average
 
+            impl_attributes['with_cilk'] = self.with_cilk
+
             rendered_impl = impl_template.render( **impl_args )
 
             import asp.jit.asp_module as asp_module
@@ -74,11 +79,12 @@ class BLB:
             mod.add_header('math.h')
             mod.add_header('time.h')
             mod.add_header('numpy/ndarrayobject.h')
+            if self.with_cilk:
+                mod.add_header('cilk/cilk.h')
             mod.add_function("compute_blb", rendered)
             mod.add_to_init('import_array();')
-            f = open('/tmp/test.cpp', 'w+')
-            f.write( str(mod.backends['c++'].module.generate()) )
-            f.close()
+            self.set_compiler_flags(mod)
+
             return mod.compute_blb(data)
 
     def __subsample(self, data, subsample_len_exp):
@@ -89,6 +95,28 @@ class BLB:
     def __bootstrap(self, data):
         bootstrap = [random.choice(data) for i in range(len(data))]
         return bootstrap
+
+    def set_compiler_flags(self, mod):
+        import asp.config
+        
+        if self.with_cilk or asp.config.CompilerDetector().detect("icc"):
+            mod.backends["c++"].toolchain.cc = "icc"
+            mod.backends["c++"].toolchain.cflags += ["-intel-extensions", "-fast", "-restrict"]
+            mod.backends["c++"].toolchain.cflags += ["-openmp", "-fno-fnalias", "-fno-alias"]
+            mod.backends["c++"].toolchain.cflags += ["-I/usr/include/x86_64-linux-gnu"]
+            mod.backends["c++"].toolchain.cflags.remove('-fwrapv')
+            mod.backends["c++"].toolchain.cflags.remove('-O2')
+            mod.backends["c++"].toolchain.cflags.remove('-g')
+            mod.backends["c++"].toolchain.cflags.remove('-g')
+            mod.backends["c++"].toolchain.cflags.remove('-fno-strict-aliasing')
+        else:
+            mod.backends["c++"].toolchain.cflags += ["-fopenmp", "-O3", "-msse3"]
+
+        if mod.backends["c++"].toolchain.cflags.count('-Os') > 0:
+            mod.backends["c++"].toolchain.cflags.remove('-Os')
+        if mod.backends["c++"].toolchain.cflags.count('-O2') > 0:
+            mod.backends["c++"].toolchain.cflags.remove('-O2')
+
 
     # These three methods are to be implemented by subclasses
     #def compute_estimate(self, sample):

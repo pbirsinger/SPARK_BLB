@@ -50,3 +50,9 @@ class SDSD_BLB(BLB):
     def average(self, sample):
         return mean(sample)
 
+class CMeanSD_BLB(BLB):
+    def __init__( self ):
+        self.compute_estimate = 'stdev'
+        self.reduce_bootstraps = 'mean'
+        self.average = 'mean'
+        BLB.__init__( self )
