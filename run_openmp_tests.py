@@ -124,7 +124,7 @@ for event in trainingdata:
         continue
     else:
         data.append(float(event[1]))
-data = numpy.array(data) 
+ 
     
 blb = MeanMean_BLB()
 result = blb.run(data)

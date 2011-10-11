@@ -7,9 +7,10 @@ import random
 class BLB:
     known_reducers= ['mean', 'stdev']
     def __init__(self, num_subsamples=100, num_bootstraps=25, 
-                 subsample_len_exp=0.5, with_cilk=False):
+                 subsample_len_exp=0.5, with_cilk=False, with_openMP=False):
 
         self.with_cilk=with_cilk
+        self.with_openMP = with_openMP
         self.pure_python = False
         for method in [ 'compute_estimate', 'reduce_bootstraps', 'average' ]:
             if not hasattr(self, method):
@@ -17,7 +18,6 @@ class BLB:
             else:
                 method_f = getattr(self, method)
                 if hasattr( method_f, '__call__' ):
-                    print "Warning: using pure-python mode for %s" % method
                     self.pure_python = True
                         
         if self.pure_python and str in map( type, [ self.compute_estimate, self.average, 
@@ -41,13 +41,17 @@ class BLB:
                 subsample_estimates.append(self.reduce_bootstraps(bootstrap_estimates))
             return self.average(subsample_estimates)
         else:
-            sub_n = int( pow( len(data), self.subsample_len_exp ) )
+            template_name = ''
+            if self.with_openMP:
+                template_name = 'blb_omp.mako'
+            else:
+                template_name = 'blb_template.mako'
+
+            fwk_args = self.set_framework_args(data)
             import asp.codegen.templating.template as template
-            blb_template = template.Template(filename="templates/blb_template.mako", disable_unicode=True)
+            blb_template = template.Template(filename="templates/%s" % template_name, disable_unicode=True)
             impl_template = template.Template(filename="templates/blb_impl.mako", disable_unicode=True)
-            rendered = blb_template.render( sub_n=sub_n, n_data=len(data), n_subsamples=self.num_subsamples,
-                                            n_bootstraps=self.num_bootstraps, compute_estimate=self.compute_estimate,
-                                            reduce_bootstraps=self.reduce_bootstraps, average=self.average )
+            rendered = blb_template.render( **fwk_args )
 
             
             impl_args ={}
@@ -75,15 +79,10 @@ class BLB:
             import asp.jit.asp_module as asp_module
             mod = asp_module.ASPModule()
             mod.add_function('compute_estimate', rendered_impl)
-            mod.add_header('stdlib.h')
-            mod.add_header('math.h')
-            mod.add_header('time.h')
-            mod.add_header('numpy/ndarrayobject.h')
-            if self.with_cilk:
-                mod.add_header('cilk/cilk.h')
             mod.add_function("compute_blb", rendered)
-            mod.add_to_init('import_array();')
+
             self.set_compiler_flags(mod)
+            self.set_includes(mod)
 
             return mod.compute_blb(data)
 
@@ -95,6 +94,18 @@ class BLB:
     def __bootstrap(self, data):
         bootstrap = [random.choice(data) for i in range(len(data))]
         return bootstrap
+
+    def set_includes(self, mod):
+            mod.add_header('stdlib.h')
+            mod.add_header('math.h')
+            mod.add_header('time.h')
+            mod.add_header('numpy/ndarrayobject.h')
+            if self.with_cilk:
+                mod.add_header('cilk/cilk.h')
+            if self.with_openMP:
+                mod.add_header('limits.h')
+
+            mod.add_to_init('import_array();')
 
     def set_compiler_flags(self, mod):
         import asp.config
@@ -117,7 +128,22 @@ class BLB:
         if mod.backends["c++"].toolchain.cflags.count('-O2') > 0:
             mod.backends["c++"].toolchain.cflags.remove('-O2')
 
-
+    def set_framework_args(self, data):
+        '''
+        Return a dictionary containing the appropriate kwargs for redering
+        the framework template.
+        '''
+        ret = {}
+        ret['sub_n'] = int( pow( len(data), self.subsample_len_exp ) )
+        ret['n_data'] = len(data)
+        ret['n_subsamples'] = self.num_subsamples
+        ret['n_bootstraps'] = self.num_bootstraps
+        
+        if self.with_openMP:
+            # specialise this somehow.
+            ret['omp_n_threads'] = 8
+            
+        return ret
     # These three methods are to be implemented by subclasses
     #def compute_estimate(self, sample):
     #    '''The actual statistic being computed. E.g. mean, standard deviation,

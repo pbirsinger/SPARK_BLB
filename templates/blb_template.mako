@@ -49,6 +49,7 @@ PyObject* compute_blb( PyObject*  data ){
   unsigned int * subsample_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
   unsigned int * bootstrap_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
   for( int i=0; i<${n_subsamples}; i++ ){
+    
     subsample( subsample_indicies );
     for( int j=0; j<${n_bootstraps}; j++ ){
       bootstrap( subsample_indicies, bootstrap_indicies );
