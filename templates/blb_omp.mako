@@ -23,6 +23,7 @@ void bootstrap(unsigned int* in, unsigned int* out) {
 
 
 void set_bit(word_t *words, int n) {
+        printf("Setting a bit\n");
 	words[WORD_OFFSET(n)] |= (1 << BIT_OFFSET(n));
 }
 
@@ -31,6 +32,7 @@ void clear_bit(word_t *words, int n) {
 }
 
 int get_bit(word_t *words, int n) {
+        printf("Getting a bit\n");
 	word_t bit = words[WORD_OFFSET(n)] & (1 << BIT_OFFSET(n));
 	return bit != 0;
 }
@@ -38,24 +40,25 @@ int get_bit(word_t *words, int n) {
 void subsample(unsigned int* out) {
      	//gsl_rng * r = gsl_rng_alloc(gsl_rng_taus); //Initialize random number generator
 	//gsl_rng_set(r, 0); //Initialize with standard seed
-	int i = 0;
+	unsigned int i = 0;
 	unsigned int index = 0;
 	//Create a bit array to keep track of whether we have seen an index
-	word_t * bitArray = (word_t *) malloc( (((int) ${sub_n} / BITS_PER_WORD) + 1) * sizeof(word_t));
+	char* bitArray = (char*) malloc(  ${n_data} * sizeof(char));
+	memset(bitArray, 0, ${n_data} );
 	for (i; i < ${sub_n}; i++) {
 		do {
-			index =  rand() % ${n_data};//gsl_rng_uniform_unt(r, size_in); //Generate random integer between 0 and size_in
-		} while (get_bit(bitArray, i));
+			index =  rand() % ${n_data}; //gsl_rng_uniform_unt(r, size_in); //Generate random integer between 0 and size_in
+		} while( bitArray[index]);
 		//We have not seen index before so we update our bitArray
-		set_bit(bitArray, i);
+		bitArray[index] = 1;
 		out[i] = index;
 	}
 	//Free up memory
 	free(bitArray);
-//	gsl_rng_free(r);
 }
 
 PyObject * compute_blb(PyObject * data) {
+    printf("About to start\n");
     Py_INCREF( data );
     PyObject * py_arr = PyArray_FROM_OTF( data, NPY_FLOAT32, NPY_IN_ARRAY );
     Py_INCREF( py_arr );
@@ -65,16 +68,18 @@ PyObject * compute_blb(PyObject * data) {
     float * subsample_estimates = (float*) calloc(${n_subsamples}, sizeof(float));
     float * bootstrap_estimates = (float*) calloc(${sub_n}, sizeof(float));
     unsigned int * subsample_indicies = (unsigned int*) calloc(${sub_n}, sizeof(unsigned int));
-    unsigned int * bootstrap_indicies = (unsigned int*) calloc(${sub_n}, sizeof(unsigned int));
+
     //We use static scheduling to avoid the overhead of synchronization and assigning tasks to threads dynamically
-    #pragma omp parallel num_threads(${omp_n_threads})
-    #pragma omp parallel for schedule(static)
     for (int i = 0; i < ${n_subsamples}; i++) {
     	subsample(subsample_indicies);
 	int j = 0;
-	for (j; j < ${n_bootstraps}; j++) {
+	#pragma omp parallel num_threads(${omp_n_threads})
+	#pragma omp parallel for schedule(static)
+	for (int j=0; j < ${n_bootstraps}; j++) {
+	    unsigned int * bootstrap_indicies = (unsigned int*) calloc(${sub_n}, sizeof(unsigned int));
 	    bootstrap(subsample_indicies, bootstrap_indicies);
 	    bootstrap_estimates[j] = compute_estimate(c_arr, bootstrap_indicies, ${sub_n});
+	    free(bootstrap_indicies);
 	}
 	subsample_estimates[i] = reduce_bootstraps(bootstrap_estimates, ${n_bootstraps});
     }
@@ -83,7 +88,7 @@ PyObject * compute_blb(PyObject * data) {
     free(subsample_indicies);
     free(subsample_estimates);
     free(bootstrap_estimates);
-    free(bootstrap_indicies);
+
     Py_DECREF( py_arr );
     Py_DECREF( data );
     return PyFloat_FromDouble(theta);

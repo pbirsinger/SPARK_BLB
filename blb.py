@@ -1,8 +1,10 @@
-"""Main class representing the BLB algorithm.
+"""
+Main class representing the BLB algorithm.
 
 """
 
 import random
+import numpy
 
 class BLB:
     known_reducers= ['mean', 'stdev']
@@ -26,10 +28,19 @@ class BLB:
         self.num_subsamples = num_subsamples
         self.num_bootstraps = num_bootstraps
         self.subsample_len_exp = subsample_len_exp
+        self.cached_mods = {}
+
+
+    
+    def fingerprint(self, data):
+        """
+        Return a tuple of problem information sufficient to
+        determine compilation-equivalence.
+        """
+        return (len(data),type(data))
 
     def run(self, data):
-        pure_python = self.pure_python
-        if pure_python:
+        if self.pure_python:
             subsample_estimates = []
             for i in range(self.num_subsamples):
                 subsample = self.__subsample(data, self.subsample_len_exp)
@@ -41,50 +52,62 @@ class BLB:
                 subsample_estimates.append(self.reduce_bootstraps(bootstrap_estimates))
             return self.average(subsample_estimates)
         else:
-            template_name = ''
-            if self.with_openMP:
-                template_name = 'blb_omp.mako'
+            f = self.fingerprint(data)
+            mod = None
+            if f in self.cached_mods:
+                mod = self.cached_mods[f]
             else:
-                template_name = 'blb_template.mako'
-
-            fwk_args = self.set_framework_args(data)
-            import asp.codegen.templating.template as template
-            blb_template = template.Template(filename="templates/%s" % template_name, disable_unicode=True)
-            impl_template = template.Template(filename="templates/blb_impl.mako", disable_unicode=True)
-            rendered = blb_template.render( **fwk_args )
-
-            
-            impl_args ={}
-            impl_attributes={}
-            impl_args['attributes'] = impl_attributes
-            if self.compute_estimate in BLB.known_reducers:
-                impl_args['use_classifier'] = self.compute_estimate
-            else:
-                impl_args['classifier'] = self.compute_estimate
-
-            if self.reduce_bootstraps in BLB.known_reducers:
-                impl_args['use_bootstrap_reducer'] = self.reduce_bootstraps
-            else:
-                impl_args['bootstrap_reducer'] = self.reduce_bootstraps
-
-            if self.average in BLB.known_reducers:
-                impl_args['use_subsample_reducer'] = self.average
-            else:
-                impl_args['subsample_reducer'] = self.average
-
-            impl_attributes['with_cilk'] = self.with_cilk
-
-            rendered_impl = impl_template.render( **impl_args )
-
-            import asp.jit.asp_module as asp_module
-            mod = asp_module.ASPModule()
-            mod.add_function('compute_estimate', rendered_impl)
-            mod.add_function("compute_blb", rendered)
-
-            self.set_compiler_flags(mod)
-            self.set_includes(mod)
-
+                mod = self.build_mod(data)
+                self.cached_mods[f] = mod
             return mod.compute_blb(data)
+
+    def build_mod(self, data):
+        template_name = ''
+        if self.with_openMP:
+            template_name = 'blb_omp.mako'
+        else:
+            template_name = 'blb_template.mako'
+            
+        fwk_args = self.set_framework_args(data)
+        import asp.codegen.templating.template as template
+        blb_template = template.Template(filename="templates/%s" % template_name, disable_unicode=True)
+        impl_template = template.Template(filename="templates/blb_impl.mako", disable_unicode=True)
+        rendered = blb_template.render( **fwk_args )
+        
+        
+        impl_args ={}
+        impl_attributes={}
+        impl_args['attributes'] = impl_attributes
+        if self.compute_estimate in BLB.known_reducers:
+            impl_args['use_classifier'] = self.compute_estimate
+        else:
+            impl_args['classifier'] = self.compute_estimate
+
+        if self.reduce_bootstraps in BLB.known_reducers:
+            impl_args['use_bootstrap_reducer'] = self.reduce_bootstraps
+        else:
+            impl_args['bootstrap_reducer'] = self.reduce_bootstraps
+            
+        if self.average in BLB.known_reducers:
+            impl_args['use_subsample_reducer'] = self.average
+        else:
+            impl_args['subsample_reducer'] = self.average
+
+        impl_attributes['with_cilk'] = self.with_cilk
+
+        rendered_impl = impl_template.render( **impl_args )
+        
+        import asp.jit.asp_module as asp_module
+        mod = asp_module.ASPModule()
+        mod.add_function('compute_estimate', rendered_impl)
+        mod.add_function("compute_blb", rendered)
+
+        self.set_compiler_flags(mod)
+        self.set_includes(mod)
+        f = open('blbout.cpp','w+')
+        f.write( str(mod.backends['c++'].module.generate()) )
+        f.close()
+        return mod
 
     def __subsample(self, data, subsample_len_exp):
         subsample_len = int(len(data) ** subsample_len_exp)
@@ -100,6 +123,7 @@ class BLB:
             mod.add_header('math.h')
             mod.add_header('time.h')
             mod.add_header('numpy/ndarrayobject.h')
+  
             if self.with_cilk:
                 mod.add_header('cilk/cilk.h')
             if self.with_openMP:
@@ -110,7 +134,8 @@ class BLB:
     def set_compiler_flags(self, mod):
         import asp.config
         
-        if self.with_cilk or asp.config.CompilerDetector().detect("icc"):
+#        mod.backends["c++"].toolchain.cflags += ['-Llibprofiler.so.0']
+        if self.with_cilk: # or asp.config.CompilerDetector().detect("icc"):
             mod.backends["c++"].toolchain.cc = "icc"
             mod.backends["c++"].toolchain.cflags += ["-intel-extensions", "-fast", "-restrict"]
             mod.backends["c++"].toolchain.cflags += ["-openmp", "-fno-fnalias", "-fno-alias"]
@@ -133,15 +158,22 @@ class BLB:
         Return a dictionary containing the appropriate kwargs for redering
         the framework template.
         '''
+        # estimate cache line size
+        line_size=1024
         ret = {}
+        if type(data) is list:
+            ret['seq_type'] = 'list'
+        elif type(data) is numpy.ndarray:
+            ret['seq_type'] = 'ndarray'
+        ret['bootstrap_unroll'] = 1
         ret['sub_n'] = int( pow( len(data), self.subsample_len_exp ) )
         ret['n_data'] = len(data)
         ret['n_subsamples'] = self.num_subsamples
         ret['n_bootstraps'] = self.num_bootstraps
-        
+        ret['subsample_threshold'] = .9*float(ret['sub_n'])/line_size
         if self.with_openMP:
             # specialise this somehow.
-            ret['omp_n_threads'] = 8
+            ret['omp_n_threads'] = 4
             
         return ret
     # These three methods are to be implemented by subclasses
