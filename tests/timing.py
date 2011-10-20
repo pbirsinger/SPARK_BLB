@@ -64,14 +64,14 @@ def make_data( n ):
 
 if __name__ == '__main__':
     py_blb = PyMeanStdev_BLB()
-    test_blb = CMeanStdev_BLB()
+    test_blb = CMeanStdev_BLB(with_openMP=True)
     n_iters = 100
     start = time.clock()
     for i in xrange(n_iters):
         pass
     bias = (time.clock() - start)/float(n_iters)
     
-    for size in [ 256 ]:
+    for size in [ 4, 10, 16, 25, 50, 64, 100, 256 ]:
         
     
         datas = make_data( size * 1000 )
@@ -82,11 +82,11 @@ if __name__ == '__main__':
             py_blb.run( datas )
         py_time = (time.clock() - start)/float(n_iters) - bias
         print 'py_time was %f' % py_time
+        test_blb.run( cdatas )
         print 'test, size = %d' % (size * 1000)
-        test_blb.run( datas )
         start = time.clock()
         for i in xrange( n_iters ):
-            test_blb.run(datas)
+            test_blb.run(cdatas)
         test_time = (time.clock() - start)/float(n_iters) - bias
         print 'test time was %f' % test_time
         print 'speedup, size = %d: %fx' % ((size * 1000), (py_time/test_time))

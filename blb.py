@@ -65,6 +65,8 @@ class BLB:
         template_name = ''
         if self.with_openMP:
             template_name = 'blb_omp.mako'
+        elif self.with_cilk:
+            template_name = 'blb_cilk.mako'
         else:
             template_name = 'blb_template.mako'
             
@@ -123,18 +125,20 @@ class BLB:
             mod.add_header('math.h')
             mod.add_header('time.h')
             mod.add_header('numpy/ndarrayobject.h')
-  
             if self.with_cilk:
                 mod.add_header('cilk/cilk.h')
             if self.with_openMP:
-                mod.add_header('limits.h')
-
+                mod.add_header('gsl/gsl_rng.h')
+                mod.add_header('omp.h')
+                mod.add_library('gsl_rng',[],['/usr/local/lib'],['gsl', 'gslcblas'])
+#                mod.add_library('ca_rng', [], ['/usr/local/lib'], ['carng'])
             mod.add_to_init('import_array();')
 
     def set_compiler_flags(self, mod):
         import asp.config
         
 #        mod.backends["c++"].toolchain.cflags += ['-Llibprofiler.so.0']
+
         if self.with_cilk: # or asp.config.CompilerDetector().detect("icc"):
             mod.backends["c++"].toolchain.cc = "icc"
             mod.backends["c++"].toolchain.cflags += ["-intel-extensions", "-fast", "-restrict"]
@@ -173,7 +177,10 @@ class BLB:
         ret['subsample_threshold'] = .9*float(ret['sub_n'])/line_size
         if self.with_openMP:
             # specialise this somehow.
-            ret['omp_n_threads'] = 4
+            ret['omp_n_threads'] = 2
+        elif self.with_cilk:
+            ret['cilk_n_workers'] = 8
+
             
         return ret
     # These three methods are to be implemented by subclasses
