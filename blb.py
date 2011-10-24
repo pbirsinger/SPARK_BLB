@@ -125,13 +125,13 @@ class BLB:
             mod.add_header('math.h')
             mod.add_header('time.h')
             mod.add_header('numpy/ndarrayobject.h')
+            mod.add_header('gsl/gsl_rng.h')
+            mod.add_library('gsl_rng',[],['/usr/local/lib'],['gsl', 'gslcblas'])
             if self.with_cilk:
                 mod.add_header('cilk/cilk.h')
             if self.with_openMP:
-                mod.add_header('gsl/gsl_rng.h')
                 mod.add_header('omp.h')
-                mod.add_library('gsl_rng',[],['/usr/local/lib'],['gsl', 'gslcblas'])
-#                mod.add_library('ca_rng', [], ['/usr/local/lib'], ['carng'])
+
             mod.add_to_init('import_array();')
 
     def set_compiler_flags(self, mod):
