@@ -28,9 +28,9 @@ enum {
 };
 
 //USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
-void bootstrap(unsigned int* in, unsigned int* out, gsl_rng* rng) {
+void bootstrap(unsigned int* in, unsigned int* out, int seed) {
 	for (int i = 0; i < ${sub_n}; i++) {
-		int index = gsl_rng_uniform_int(rng, ${sub_n});
+		int index = rand_r(&seed) % ${sub_n};
 		out[i] = in[index];
 	}
 }
@@ -56,10 +56,10 @@ We're going to try a little experiment.
 We're goiing to play it fast and loose, relying upon the period
 of our RNG to not select the same index twice in short sequence.
 </%doc>
-void subsample(unsigned int* out, gsl_rng* rng) {
+void subsample(unsigned int* out, int seed) {
      	unsigned int index = 0;
 	for (int i=0; i < ${sub_n}; i++) {
-		index =  gsl_rng_uniform_int(rng, ${n_data}); //Generate random integer between 0 and size_in
+		index =  rand_r(&seed) % ${n_data};
 		out[i] = index;
 	}
 }
@@ -82,21 +82,21 @@ PyObject * compute_blb(PyObject * data) {
     unsigned int* local_bi = bootstrap_indicies+(${sub_n}*tid);
     unsigned int* local_si = subsample_indicies+(${sub_n}*tid);
     float* local_be = bootstrap_estimates+(${n_bootstraps}*tid);
-    gsl_rng * m_rng = gsl_rng_alloc(gsl_rng_taus);
-    gsl_rng_set(m_rng, time(NULL)*(1+tid)); 
+//    gsl_rng * m_rng = gsl_rng_alloc(gsl_rng_taus);
+//    gsl_rng_set(m_rng, time(NULL)*(1+tid)); 
 
     #pragma omp for schedule(static) 
     for (int i = 0; i < ${n_subsamples}; i++) {
-    	subsample(local_si, m_rng);
+    	subsample(local_si, 0);
 	for (int j=0; j < ${n_bootstraps}; j++) {
-	    bootstrap(local_si, local_bi, m_rng);
+	    bootstrap(local_si, local_bi, 0);
 	    local_be[j] = compute_estimate(c_arr, local_bi, ${sub_n});
 	}
 
 	subsample_estimates[i] = reduce_bootstraps(local_be, ${n_bootstraps});
     }
     //printf("About to free m_rng for thread %d\n", tid);
-    gsl_rng_free(m_rng);
+//    gsl_rng_free(m_rng);
     //printf("Freed m_rng for thread %d\n", tid);    
 }//end parallel
     float theta = average(subsample_estimates, ${n_subsamples});
