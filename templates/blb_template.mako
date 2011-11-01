@@ -9,7 +9,7 @@ USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
  seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
 
-void bootstrap( const unsigned int* in, unsigned int* out ){
+void bootstrap( const unsigned int* in, unsigned int* out, int seed ){
     <%
         if bootstrap_unroll is UNDEFINED:
 	    b = 1
@@ -18,11 +18,11 @@ void bootstrap( const unsigned int* in, unsigned int* out ){
     %>
   for( int i=0; i< ${sub_n/b}; i++ ){
     % for i in range(b):
-    out[i*${b} + ${i}] = in[ rand() % ${sub_n} ];
+    out[i*${b} + ${i}] = in[ rand_r(&seed) % ${sub_n} ];
     % endfor
   }
   % for i in range(sub_n % b):
-  out[${sub_n-1-i}] = in[ rand() % ${sub_n} ];
+  out[${sub_n-1-i}] = in[ rand_r(&seed) % ${sub_n} ];
   % endfor 
 }
 
@@ -50,14 +50,14 @@ void bootstrap( const unsigned int* in, unsigned int* out ){
 
 <%doc>
 const int threshold = (int)(${subsample_threshold}*RAND_MAX);
-inline int flip( void ){
-    return (rand() < threshold); 
+inline int flip( int seed ){
+    return (rand_r(&seed) < threshold); 
 }
 unsigned int subsample_offset = 0;
 void subsample ( unsigned int* out ){
     int size_out = ${sub_n};
     while( size_out > 0 ){
-        if( flip() ){
+        if( flip( 0 ) ){
 	    out[ ${sub_n} - size_out ] = subsample_offset;
 	    size_out--;
 	}
@@ -101,7 +101,7 @@ PyObject* compute_blb( PyObject* data ){
     subsample( subsample_indicies, rng );
     for( int j=0; j<${n_bootstraps}; j++ ){
 
-      bootstrap( subsample_indicies, bootstrap_indicies );
+      bootstrap( subsample_indicies, bootstrap_indicies, 0 );
       bootstrap_estimates[j] = compute_estimate( c_arr, bootstrap_indicies, ${sub_n} );
 
     }

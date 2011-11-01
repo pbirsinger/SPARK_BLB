@@ -64,7 +64,7 @@ def make_data( n ):
 
 if __name__ == '__main__':
     py_blb = PyMeanStdev_BLB()
-    test_blb = CMeanStdev_BLB(with_openMP=True)
+    openMP_blb = CMeanStdev_BLB(with_openMP=True)
     n_iters = 100
     start = time.clock()
     for i in xrange(n_iters):
@@ -76,19 +76,19 @@ if __name__ == '__main__':
     
         datas = make_data( size * 1000 )
         cdatas = numpy.array( datas, dtype='float32' )
-        print 'python, size = %d' % ( size * 1000 )
+        print 'Running pure python version with size %d' % ( size * 1000 )
         start = time.clock()
         for i in xrange( n_iters ):
             py_blb.run( datas )
         py_time = (time.clock() - start)/float(n_iters) - bias
-        print 'py_time was %f' % py_time
-        test_blb.run( cdatas )
-        print 'test, size = %d' % (size * 1000)
+#        print 'py_time was %f' % py_time
+        openMP_blb.run( cdatas )
+        print 'Running OpenMP version with size %d' % (size * 1000)
         start = time.clock()
         for i in xrange( n_iters ):
-            test_blb.run(cdatas)
-        test_time = (time.clock() - start)/float(n_iters) - bias
-        print 'test time was %f' % test_time
-        print 'speedup, size = %d: %fx' % ((size * 1000), (py_time/test_time))
+            openMP_blb.run(cdatas)
+        openMP_time = (time.clock() - start)/float(n_iters) - bias
+#        print 'openMP time was %f' % openMP_time
+        print 'OpenMP test completed for size %d. Speedup was %fx' % ((size * 1000), (py_time/openMP_time))
 
     print 'all done!'
