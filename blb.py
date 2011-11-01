@@ -125,13 +125,15 @@ class BLB:
             mod.add_header('math.h')
             mod.add_header('time.h')
             mod.add_header('numpy/ndarrayobject.h')
-            mod.add_header('gsl/gsl_rng.h')
-            mod.add_library('gsl_rng',[],['/usr/local/lib'],['gsl', 'gslcblas'])
+            
             if self.with_cilk:
                 mod.add_header('cilk/cilk.h')
-            if self.with_openMP:
+		mod.add_header('cilk/cilk_api.h')
+            elif self.with_openMP:
                 mod.add_header('omp.h')
-
+		mod.add_header('gsl/gsl_rng.h')
+            	mod.add_library('gsl_rng',[],['/usr/local/lib'],['gsl', 'gslcblas'])
+	
             mod.add_to_init('import_array();')
 
     def set_compiler_flags(self, mod):
@@ -146,7 +148,6 @@ class BLB:
             mod.backends["c++"].toolchain.cflags += ["-I/usr/include/x86_64-linux-gnu"]
             mod.backends["c++"].toolchain.cflags.remove('-fwrapv')
             mod.backends["c++"].toolchain.cflags.remove('-O2')
-            mod.backends["c++"].toolchain.cflags.remove('-g')
             mod.backends["c++"].toolchain.cflags.remove('-g')
             mod.backends["c++"].toolchain.cflags.remove('-fno-strict-aliasing')
         else:
@@ -177,10 +178,10 @@ class BLB:
         ret['subsample_threshold'] = .9*float(ret['sub_n'])/line_size
         if self.with_openMP:
             # specialise this somehow.
-            ret['omp_n_threads'] = 2
+            ret['omp_n_threads'] = 16
         elif self.with_cilk:
-            ret['cilk_n_workers'] = 8
-
+            ret['cilk_n_workers'] = 10
+	    ret['parallel_loop'] = 'manual'
             
         return ret
     # These three methods are to be implemented by subclasses
