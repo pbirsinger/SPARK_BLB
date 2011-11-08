@@ -12,7 +12,7 @@ class BLB:
                  subsample_len_exp=0.5, with_cilk=False, with_openMP=False):
 
         self.with_cilk=with_cilk
-        self.with_openMP = with_openMP
+	self.with_openMP = with_openMP
         self.pure_python = False
         for method in [ 'compute_estimate', 'reduce_bootstraps', 'average' ]:
             if not hasattr(self, method):
@@ -131,8 +131,6 @@ class BLB:
 		mod.add_header('cilk/cilk_api.h')
             elif self.with_openMP:
                 mod.add_header('omp.h')
-		mod.add_header('gsl/gsl_rng.h')
-            	mod.add_library('gsl_rng',[],['/usr/local/lib'],['gsl', 'gslcblas'])
 	
             mod.add_to_init('import_array();')
 
@@ -164,7 +162,6 @@ class BLB:
         the framework template.
         '''
         # estimate cache line size
-        line_size=1024
         ret = {}
         if type(data) is list:
             ret['seq_type'] = 'list'
@@ -175,13 +172,14 @@ class BLB:
         ret['n_data'] = len(data)
         ret['n_subsamples'] = self.num_subsamples
         ret['n_bootstraps'] = self.num_bootstraps
-        ret['subsample_threshold'] = .9*float(ret['sub_n'])/line_size
         if self.with_openMP:
             # specialise this somehow.
-            ret['omp_n_threads'] = 16
+	    ret['omp_n_threads'] =  getattr(self, 'omp_n_threads', 1)
+	    print 'DEBUG: omp_n_threads = %d' % ret['omp_n_threads']
         elif self.with_cilk:
-            ret['cilk_n_workers'] = 10
-	    ret['parallel_loop'] = 'manual'
+            ret['cilk_n_workers'] = getattr(self, 'cilk_n_workers', 1)
+	    print 'DEBUG: cilk_nworkers = %d' % ret['cilk_n_workers']
+	    ret['parallel_loop'] = 'outer'
             
         return ret
     # These three methods are to be implemented by subclasses
