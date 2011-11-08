@@ -52,16 +52,13 @@ PyObject * compute_blb(PyObject * data) {
 PyObject* compute_blb( PyObject* data ){
   Py_INCREF( data );
   float * c_arr = (float*) PyArray_DATA( data );
-  printf("Successfully extracted data\n");
-%endif
-
+%endif    
 
     float * subsample_estimates = (float*) calloc(${n_subsamples}, sizeof(float));
     float * bootstrap_estimates = (float*) calloc(${n_bootstraps*omp_n_threads}, sizeof(float));
     float * subsample_values = (float*) calloc(${sub_n*omp_n_threads}, sizeof(float));
     unsigned int * bootstrap_indicies = (unsigned int*) calloc(${sub_n*omp_n_threads}, sizeof(unsigned int));
     //We use static scheduling to avoid the overhead of synchronization and assigning tasks to threads dynamically
-
 
     #pragma omp parallel for schedule(static) num_threads(${omp_n_threads})
     for (int i = 0; i < ${n_subsamples}; i++) {

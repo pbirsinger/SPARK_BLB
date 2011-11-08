@@ -9,40 +9,69 @@ USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
   seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
 
-void bootstrap( const unsigned int* in, unsigned int* out, unsigned int* seed ){
+void bootstrap( const unsigned int* in, unsigned int* out, int seed ){
     <%
         if bootstrap_unroll is UNDEFINED:
-            b = 1
-        else:
-            b = bootstrap_unroll
+	    b = 1
+	else:
+	    b = bootstrap_unroll
     %>
   for( int i=0; i< ${sub_n/b}; i++ ){
     % for i in range(b):
-    out[i*${b} + ${i}] = in[ rand_r(seed) % ${sub_n} ];
+    out[i*${b} + ${i}] = in[ rand_r(&seed) % ${sub_n} ];
     % endfor
   }
   % for i in range(sub_n % b):
-  out[${sub_n-1-i}] = in[ rand_r(seed) % ${sub_n} ];
-  % endfor
+  out[${sub_n-1-i}] = in[ rand_r(&seed) % ${sub_n} ];
+  % endfor 
 }
 
-void loaded_bootstrap( unsigned int* out, unsigned int * seed ){
-        for( int i = 0; i<${sub_n}; i++ ){
-            out[i] = rand_r(seed) % ${sub_n};
-        }
+ char subsampled[ ${n_data} ];
+ void subsample( unsigned int* out, int* seed ){
+ //  printf("About to subsample");
+  int size_out = ${sub_n};
+  while( size_out > 0 ){
+    unsigned int index = rand_r(&seed) % ${n_data};
+    if( subsampled[index] ){
+      // Rely on not randomly selecting the same index
+      // three times in one run
+      subsampled[index] = 0;
+    } else {
+      subsampled[index] = 1;
+      out[ ${sub_n} - size_out ] = index;
+      size_out--;
+    }
+  }
+//  for( int i=0; i<${sub_n}; i++ ){
+//       subsampled[ out[i] ] = 0;
+//  }
+ }
+
+
+<%doc>
+const int threshold = (int)(${subsample_threshold}*RAND_MAX);
+inline int flip( int seed ){
+    return (rand_r(&seed) < threshold); 
+}
+unsigned int subsample_offset = 0;
+void subsample ( unsigned int* out ){
+    int size_out = ${sub_n};
+    while( size_out > 0 ){
+        if( flip( 0 ) ){
+	    out[ ${sub_n} - size_out ] = subsample_offset;
+	    size_out--;
+	}
+	if( ++subsample_offset == ${n_data} ){
+	    subsample_offset = 0;
+	}
+    }
 }
 
-
-void subsample_and_load( float* data, float* out, unsigned int* seed ){
-        for( int i = 0; i<${sub_n}; i++ ){
-            out[i] = data[ rand_r(seed) % ${n_data} ];
-        }
-}
-
+</%doc>
 
 
 ## list is the default type.
-%if seq_type == 'list':
+%if seq_type == 'list': 
 
 PyObject* compute_blb( PyObject*  data ){
   Py_INCREF(data);
@@ -57,21 +86,22 @@ PyObject* compute_blb( PyObject* data ){
   float * c_arr = (float*) PyArray_DATA( data );
 
 %endif
+  memset( subsampled, 0, ${n_data} );
+  
 
   //note that these are never cleared; We always fill them up
   //with the appropriate data before perform calculations on them.
   float * subsample_estimates = (float*) calloc( ${n_subsamples}, sizeof(float) );
-  float * subsample_values = (float*) calloc( ${sub_n}, sizeof(float) );
+  unsigned int * subsample_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );    
   unsigned int * bootstrap_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
   float * bootstrap_estimates =  (float*) calloc( ${sub_n}, sizeof(float) );
-  unsigned int cell = time(NULL);
   for( int i=0; i<${n_subsamples}; i++ ){
 
-    subsample_and_load( c_arr, subsample_values, &cell );
+    subsample( subsample_indicies, 0 );
     for( int j=0; j<${n_bootstraps}; j++ ){
 
-      loaded_bootstrap( bootstrap_indicies, &cell );
-      bootstrap_estimates[j] = compute_estimate( subsample_values, bootstrap_indicies, ${sub_n} );
+      bootstrap( subsample_indicies, bootstrap_indicies, 0 );
+      bootstrap_estimates[j] = compute_estimate( c_arr, bootstrap_indicies, ${sub_n} );
 
     }
     subsample_estimates[i] = reduce_bootstraps( bootstrap_estimates, ${n_bootstraps} );
@@ -82,14 +112,10 @@ PyObject* compute_blb( PyObject* data ){
   free( subsample_estimates );
   free( bootstrap_indicies );
   free( bootstrap_estimates );
-  free( subsample_values );
+  free( subsample_indicies );
 %if seq_type is UNDEFINED or seq_type == 'list':
   Py_DECREF( py_arr );
 %endif
   Py_DECREF( data );
   return PyFloat_FromDouble(theta);
 }
-
-
-
-
