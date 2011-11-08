@@ -1,12 +1,12 @@
 <%doc>
 USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
- Templating variables in use:
- sub_n: The size b(n) of data to be subsampled
- n_data: The initial data size
- n_subsamples: The number of subsamples to take
- n_bootstraps: The number of bootstraps to compute per subsample
- subsmaple_threshold: the probability parameter for the subsample rng
- seq_type: The python type of the data sequence, should be list or ndarray
+  Templating variables in use:
+  sub_n: The size b(n) of data to be subsampled
+  n_data: The initial data size
+  n_subsamples: The number of subsamples to take
+  n_bootstraps: The number of bootstraps to compute per subsample
+  subsmaple_threshold: the probability parameter for the subsample rng
+  seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
 
 void bootstrap( const unsigned int* in, unsigned int* out, int seed ){
