@@ -1,5 +1,4 @@
 <%doc>
-USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
  Templating variables in use:
  sub_n: The size b(n) of data to be subsampled
  n_data: The initial data size
@@ -8,45 +7,6 @@ USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
  subsmaple_threshold: the probability parameter for the subsample rng
  seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
-
-
-void bootstrap( const unsigned int* in, unsigned int* out ){
-    <%
-        if bootstrap_unroll is UNDEFINED:
-	    b = 1
-	else:
-	    b = bootstrap_unroll
-    %>
-  for( int i=0; i< ${sub_n/b}; i++ ){
-    % for i in range(b):
-    out[i*${b} + ${i}] = in[ rand() % ${sub_n} ];
-    % endfor
-  }
-  % for i in range(sub_n % b):
-  out[${sub_n-1-i}] = in[ rand() % ${sub_n} ];
-  % endfor 
-}
-
-// char subsampled[ ${n_data} ];
- void subsample( unsigned int* out ){
- //  printf("About to subsample");
-  int size_out = ${sub_n};
-  while( size_out > 0 ){
-    unsigned int index = rand() % ${n_data};
-    //if( subsampled[index] ){
-      // Rely on not randomly selecting the same index
-      // three times in one run
-     // subsampled[index] = 0;
-    //} else {
-      //subsampled[index] = 1;
-      out[ ${sub_n} - size_out ] = index;
-      size_out--;
-    //}
-  }
-//  for( int i=0; i<${sub_n}; i++ ){
-//       subsampled[ out[i] ] = 0;
-//  }
- }
 
 void loaded_bootstrap( unsigned int * out, unsigned int* seed_cell ){
 	for( int i = 0; i< ${sub_n}; i++ ){
@@ -81,22 +41,6 @@ void blb_chunk( float* data, float* subsample_values, float* bootstrap_estimates
 	    subsample_estimates[i] = reduce_bootstraps( bootstrap_estimates, ${n_bootstraps} );
 	}
 }
-<%doc>
-float single_bootstrap( float* data, unsigned int* si, unsigned int* bi ){
-      bootstrap(si, bi);
-      return compute_estimate( data, bi, ${sub_n} );
-}
-
-float single_subsample( float * data, unsigned int* si, unsigned int* bi, float* be ){
-	subsample(si);
-	for(int j = 0; j<${n_bootstraps}; j++){
-		bootstrap(si, bi);
-		be[j] = compute_estimate( data, bi, ${sub_n} );
-	}
-	return reduce_bootstraps( be, ${n_bootstraps} );
-}
-</%doc>
-
 
 ## list is the default type.
 %if seq_type == 'list': 
