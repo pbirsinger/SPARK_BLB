@@ -26,13 +26,18 @@ void bootstrap( const unsigned int* in, unsigned int* out, unsigned int* seed ){
   % endfor
 }
 
+void loaded_bootstrap( unsigned int* out, unsigned int * seed ){
+        for( int i = 0; i<${sub_n}; i++ ){
+            out[i] = rand_r(seed) % ${sub_n};
+        }
+}
 
 
-void subsample( unsigned int* out, unsigned int* seed ){
-    for( unsigned int i = 0; i<${sub_n}; i++ ){
-        out[i] = rand_r(seed) % ${n_data};
-    }
- }
+void subsample_and_load( float* data, float* out, unsigned int* seed ){
+        for( int i = 0; i<${sub_n}; i++ ){
+            out[i] = data[ rand_r(seed) % ${n_data} ];
+        }
+}
 
 
 
@@ -56,17 +61,17 @@ PyObject* compute_blb( PyObject* data ){
   //note that these are never cleared; We always fill them up
   //with the appropriate data before perform calculations on them.
   float * subsample_estimates = (float*) calloc( ${n_subsamples}, sizeof(float) );
-  unsigned int * subsample_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
+  float * subsample_values = (float*) calloc( ${sub_n}, sizeof(float) );
   unsigned int * bootstrap_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
   float * bootstrap_estimates =  (float*) calloc( ${sub_n}, sizeof(float) );
   unsigned int cell = time(NULL);
   for( int i=0; i<${n_subsamples}; i++ ){
 
-    subsample( subsample_indicies, &cell );
+    subsample_and_load( c_arr, subsample_values, &cell );
     for( int j=0; j<${n_bootstraps}; j++ ){
 
-      bootstrap( subsample_indicies, bootstrap_indicies, &cell );
-      bootstrap_estimates[j] = compute_estimate( c_arr, bootstrap_indicies, ${sub_n} );
+      loaded_bootstrap( bootstrap_indicies, &cell );
+      bootstrap_estimates[j] = compute_estimate( subsample_values, bootstrap_indicies, ${sub_n} );
 
     }
     subsample_estimates[i] = reduce_bootstraps( bootstrap_estimates, ${n_bootstraps} );
@@ -77,10 +82,14 @@ PyObject* compute_blb( PyObject* data ){
   free( subsample_estimates );
   free( bootstrap_indicies );
   free( bootstrap_estimates );
-  free( subsample_indicies );
+  free( subsample_values );
 %if seq_type is UNDEFINED or seq_type == 'list':
   Py_DECREF( py_arr );
 %endif
   Py_DECREF( data );
   return PyFloat_FromDouble(theta);
 }
+
+
+
+
