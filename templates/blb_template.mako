@@ -27,6 +27,7 @@ void bootstrap( const unsigned int* in, unsigned int* out, unsigned int* seed ){
 }
 
 
+
 void subsample( unsigned int* out, unsigned int* seed ){
     for( unsigned int i = 0; i<${sub_n}; i++ ){
         out[i] = rand_r(seed) % ${n_data};
