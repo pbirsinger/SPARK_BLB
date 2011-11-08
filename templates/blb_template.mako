@@ -27,11 +27,11 @@ void bootstrap( const unsigned int* in, unsigned int* out, int seed ){
 }
 
  char subsampled[ ${n_data} ];
- void subsample( unsigned int* out, ca_rng* rng ){
+ void subsample( unsigned int* out, int* seed ){
  //  printf("About to subsample");
   int size_out = ${sub_n};
   while( size_out > 0 ){
-    unsigned int index = ca_rng_get_int(rng) % ${n_data};
+    unsigned int index = rand_r(&seed) % ${n_data};
     if( subsampled[index] ){
       // Rely on not randomly selecting the same index
       // three times in one run
@@ -95,10 +95,9 @@ PyObject* compute_blb( PyObject* data ){
   unsigned int * subsample_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );    
   unsigned int * bootstrap_indicies = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
   float * bootstrap_estimates =  (float*) calloc( ${sub_n}, sizeof(float) );
-  ca_rng* rng = ca_rng_initialize( time(NULL) );
   for( int i=0; i<${n_subsamples}; i++ ){
 
-    subsample( subsample_indicies, rng );
+    subsample( subsample_indicies, 0 );
     for( int j=0; j<${n_bootstraps}; j++ ){
 
       bootstrap( subsample_indicies, bootstrap_indicies, 0 );
@@ -114,7 +113,6 @@ PyObject* compute_blb( PyObject* data ){
   free( bootstrap_indicies );
   free( bootstrap_estimates );
   free( subsample_indicies );
-  ca_rng_free(rng);
 %if seq_type is UNDEFINED or seq_type == 'list':
   Py_DECREF( py_arr );
 %endif
