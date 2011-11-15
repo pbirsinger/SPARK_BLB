@@ -4,24 +4,37 @@ see 'blb_template.mako' for documentation on templating variables.
 </%doc>
 
 
-//USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
-void bootstrap(unsigned int* in, unsigned int* out, unsigned int* seed) {
-        for (int i = 0; i < ${sub_n}; i++) {
-                int index = rand_r(seed) % ${sub_n};
-                out[i] = in[index];
-        }
+<%def name="bigrand( fname )">
+inline unsigned long ${fname}( unsigned int* seed ){
+	unsigned long ret = rand_r(seed);
+	return ((ret << 32) | rand_r(seed));
 }
+</%def>
 
+<%def name="littlerand( fname )">
+inline unsigned int ${fname}( unsigned int* seed ){
+    return rand_r(seed);
+}
+</%def>
 
+%if n_data >= 1<<32:
+    ${bigrand('sub_rand')}
+%else:
+    ${littlerand('sub_rand')}
+%endif
 void subsample_and_load( float* data, float* out, unsigned int* seed ){
         for( int i = 0; i<${sub_n}; i++ ){
-            out[i] = data[ rand_r(seed) % ${n_data} ];
+            out[i] = data[ sub_rand(seed) % ${n_data} ];
         }
 }
-
+%if sub_n >= 1<<32:
+    ${bigrand('boot_rand')}
+%else:
+    ${littlerand('boot_rand')}
+%endif
 void loaded_bootstrap( unsigned int* out, unsigned int * seed ){
         for( int i = 0; i<${sub_n}; i++ ){
-            out[i] = rand_r(seed) % ${sub_n};
+            out[i] = boot_rand(seed) % ${sub_n};
         }
 }
 
@@ -40,12 +53,15 @@ void subsample(unsigned int* out, unsigned int* seed) {
 }
 
 ## list is the default type.
-%if seq_type == 'list':
+%if seq_type is UNDEFINED or seq_type == 'list':
 
 PyObject * compute_blb(PyObject * data) {
+    printf("Made it into C\n");
     Py_INCREF( data );
+    printf("About to extract array\n");
     PyObject * py_arr = PyArray_FROM_OTF( data, NPY_FLOAT32, NPY_IN_ARRAY );
     Py_INCREF( py_arr );
+    printf("Getting c_arr\n");
     float * c_arr = (float*) PyArray_DATA( py_arr );
 %elif seq_type == 'ndarray':
 
@@ -60,6 +76,7 @@ PyObject* compute_blb( PyObject* data ){
     unsigned int * bootstrap_indicies = (unsigned int*) calloc(${sub_n*omp_n_threads}, sizeof(unsigned int));
     //We use static scheduling to avoid the overhead of synchronization and assigning tasks to threads dynamically
 
+    printf("About to begin computation\n");
     #pragma omp parallel for schedule(static) num_threads(${omp_n_threads})
     for (int i = 0; i < ${n_subsamples}; i++) {
         int tid = omp_get_thread_num();
@@ -82,8 +99,7 @@ PyObject* compute_blb( PyObject* data ){
     free(bootstrap_estimates);
     free(bootstrap_indicies);
 
-    //printf("About to DECREF\n");
-%if seqtype == 'list':
+%if seq_type is UNDEFINED or seq_type == 'list':
     Py_DECREF( py_arr );
 %endif
     Py_DECREF( data );

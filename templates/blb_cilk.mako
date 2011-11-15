@@ -31,7 +31,7 @@ void subsample_and_load( float* data, float* out, unsigned int* cell ){
 }
 
 void blb_chunk( float* data, float* subsample_values, float* bootstrap_estimates, unsigned int* bootstrap_indicies, float* subsample_estimates , int start, int end ){
-	unsigned int cell = 0;
+	unsigned int cell = time(NULL);
 	for(int i = start; i < end; i++ ){
 	    subsample_and_load( data, subsample_values, &cell );
 	    for( int j = 0; j<${n_bootstraps}; j++ ){
@@ -69,9 +69,11 @@ PyObject* compute_blb( PyObject* data ){
   float * bootstrap_estimates =  (float*) calloc( ${n_bootstraps*(cilk_n_workers+1)}, sizeof(float) );
   unsigned int* cells = (unsigned int*) calloc( ${cilk_n_workers+1}, sizeof(unsigned int) );
   
-
+  __cilkrts_end_cilk();
   __cilkrts_set_param("nworkers","${cilk_n_workers}");
-
+  __cilkrts_init();
+  printf("DEBUG: cilk_nworkers in cilk = %d\n", __cilkrts_get_nworkers()); 
+  
   %if parallel_loop is UNDEFINED or parallel_loop == 'inner':
   for( int i = 0; i<${n_subsamples}; i++ ){
 	subsample_and_load( c_arr, subsample_values, cells );
@@ -83,7 +85,8 @@ PyObject* compute_blb( PyObject* data ){
 	}
 	subsample_estimates[i] = reduce_bootstraps( bootstrap_estimates, ${n_bootstraps} );
    }
- %elif parallel_loop == 'outer':	    
+ %elif parallel_loop == 'outer':	
+#pragma cilk grainsize = ${max(1,n_subsamples/cilk_n_workers)} 
   cilk_for(int i =0; i<${n_subsamples}; i++ ){
         unsigned int tid = __cilkrts_get_worker_number();
 	float * local_values = subsample_values+(tid*${sub_n});
@@ -100,7 +103,6 @@ PyObject* compute_blb( PyObject* data ){
   %elif parallel_loop == 'manual':
     int step = ${n_subsamples/cilk_n_workers};
     int rem = ${n_subsamples % cilk_n_workers};	
-#pragma cilk grainsize = 1
     cilk_for( int i = 0; i<${cilk_n_workers}; i++ ){
 	int end = i ? i+step : rem+step;
 	blb_chunk( c_arr, subsample_values+(i*${sub_n}), bootstrap_estimates+(i*${n_bootstraps}),

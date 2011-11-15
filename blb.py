@@ -57,11 +57,21 @@ class BLB:
             if f in self.cached_mods:
                 mod = self.cached_mods[f]
             else:
-                mod = self.build_mod(data)
+                mod = self.build_mod(f)
                 self.cached_mods[f] = mod
             return mod.compute_blb(data)
 
-    def build_mod(self, data):
+    def compile_for( self, data, key=None ):
+        f = key if key else self.fingerprint(data)
+	mod = None
+	if f in self.cached_mods:
+	    mod = self.cached_mods[f]
+	else:
+	    mod = self.build_mod(f)
+	    mod.backends["c++"].compile()
+	    self.cached_mods[f] = mod
+
+    def build_mod(self, key):
         template_name = ''
         if self.with_openMP:
             template_name = 'blb_omp.mako'
@@ -70,7 +80,7 @@ class BLB:
         else:
             template_name = 'blb_template.mako'
             
-        fwk_args = self.set_framework_args(data)
+        fwk_args = self.set_framework_args(key)
         import asp.codegen.templating.template as template
         blb_template = template.Template(filename="templates/%s" % template_name, disable_unicode=True)
         impl_template = template.Template(filename="templates/blb_impl.mako", disable_unicode=True)
@@ -156,20 +166,22 @@ class BLB:
         if mod.backends["c++"].toolchain.cflags.count('-O2') > 0:
             mod.backends["c++"].toolchain.cflags.remove('-O2')
 
-    def set_framework_args(self, data):
+    def set_framework_args(self, key):
         '''
         Return a dictionary containing the appropriate kwargs for redering
         the framework template.
+
+	the key argument is a fingerprint key for this specialiser
         '''
         # estimate cache line size
         ret = {}
-        if type(data) is list:
+        if key[1] is list:
             ret['seq_type'] = 'list'
-        elif type(data) is numpy.ndarray:
+        elif key[1] is numpy.ndarray:
             ret['seq_type'] = 'ndarray'
         ret['bootstrap_unroll'] = 1
-        ret['sub_n'] = int( pow( len(data), self.subsample_len_exp ) )
-        ret['n_data'] = len(data)
+        ret['sub_n'] = int( pow( key[0], self.subsample_len_exp ) )
+        ret['n_data'] = key[0]
         ret['n_subsamples'] = self.num_subsamples
         ret['n_bootstraps'] = self.num_bootstraps
         if self.with_openMP:
