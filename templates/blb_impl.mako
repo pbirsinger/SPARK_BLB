@@ -28,30 +28,37 @@ float average( float * data, unsigned int size );
 </%doc>
 
 ##Spits out the body of a mean calculation, sans declaration or return statement.
-<%def name="mean(iter_direct)">
+<%def name="mean(iter_direct, dim)">
     <%
-        i = 'i' if iter_direct else 'indicies[i]'
-	access = 'data[ %s ]' % i
+        j = 'j' if iter_direct else 'indicies[j]'
+	access = 'data[ %s ]' % j
     %>
-    float mean = 0.0;
-    for( unsigned int i=0; i<size; i++ ){
-       mean += ${access};
-    }			 
-    mean /= size;
+    float* mean = malloc(sizeof(float) * ${dim});
+    for (unsigned int i=0; i<${dim}; i++) {
+    	float sub_mean = 0.0;
+	for (unsigned int j=0; j<size; j+=${dim}) {
+	    sub_mean += ${access};
+	}
+	sub_mean /= (size / ${dim});
+	mean[i] = sub_mean;
+    }
 </%def>
 
 ##Spits out the body of a standard deviation calculation, like unto mean defined above.
-<%def name="stdev(iter_direct)">
+<%def name="stdev(iter_direct, dim)">
     ${mean(iter_direct)}
       <%
-	access = 'data[i]' if iter_direct else 'data[ indicies[i] ]'
+	access = 'data[i+j]' if iter_direct else 'data[ indicies[i+j] ]'
       %>
     float stdev = 0.0;
-    for( unsigned int i=0; i<size; i++ ){
-       float datum = ${access} - mean;
-       stdev += datum*datum;
+    for( unsigned int i=0; i<size; i+=${dim} ){
+    	 float squared_norm = 0.0
+	 for (unsigned int j=0; j<${dim}; j++) {
+	     squared_norm += ${access} - mean[j];
+	     squared_norm *= squared_norm;
+         stdev += squared_norm;
     }
-    stdev = sqrt( stdev / size );
+    stdev = sqrt( stdev / (size / ${dim}) );
 </%def>
 
 ##produce the classifier from the requested function
