@@ -17,7 +17,6 @@ inline unsigned int ${fname}( unsigned int* seed ){
 }
 </%def>
 
-<<<<<<< HEAD
 %if n_data >= 1<<32:
     ${bigrand('sub_rand')}
 %else:
@@ -34,10 +33,8 @@ void subsample_and_load( float* data, float* out, unsigned int* seed ){
     ${littlerand('boot_rand')}
 %endif
 void loaded_bootstrap( unsigned int* out, unsigned int * seed ){
-=======
 
 void subsample_and_load( float* data, float* out, gsl_rng* rng  ){
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
         for( int i = 0; i<${sub_n}; i++ ){
             out[i] = data[ gsl_rng_get(rng) % ${n_data} ];
         }
@@ -100,9 +97,6 @@ PyObject* compute_blb( PyObject* data ){
     printf("Start of timing.\n");
     srand(start);    
 
-<<<<<<< HEAD
-
-
     //float * const subsample_estimates = (float*) calloc(${n_subsamples}, sizeof(float));
     float subsample_estimates[${n_subsamples}];
     //printf("subsample_estimates: %x\n", (unsigned int) subsample_estimates);
@@ -115,13 +109,11 @@ PyObject* compute_blb( PyObject* data ){
     //unsigned int * const bootstrap_indicies = (unsigned int*) calloc(${sub_n*omp_n_threads}, sizeof(unsigned int));
     unsigned int bootstrap_indicies[${sub_n*omp_n_threads}];
     //printf("bootstrap_indices: %x\n", (unsigned int) bootstrap_indicies);
-=======
 %if parallel_loop is UNDEFINED or parallel_loop == 'outer':
     float * subsample_estimates = (float*) calloc(${n_subsamples}, sizeof(float));
     float * bootstrap_estimates = (float*) calloc(${n_bootstraps*omp_n_threads}, sizeof(float));
     float * subsample_values = (float*) calloc(${sub_n*omp_n_threads}, sizeof(float));
     unsigned int * bootstrap_weights = (unsigned int*) calloc(${sub_n*omp_n_threads}, sizeof(unsigned int));
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
     //We use static scheduling to avoid the overhead of synchronization and assigning tasks to threads dynamically
     gsl_rng** rngs = (gsl_rng**) malloc( ${omp_n_threads}*sizeof(gsl_rng*));
 
@@ -132,7 +124,6 @@ PyObject* compute_blb( PyObject* data ){
     #pragma omp parallel for schedule(static) num_threads(${omp_n_threads})
     for (int i = 0; i < ${n_subsamples}; i++) {
         int tid = omp_get_thread_num();
-<<<<<<< HEAD
         unsigned int* local_indicies = bootstrap_indicies+(${sub_n}*tid);
         float* const local_values = subsample_values+(${sub_n}*tid);
         float* const local_estimates = bootstrap_estimates+(${n_bootstraps}*tid);
@@ -142,7 +133,6 @@ PyObject* compute_blb( PyObject* data ){
             loaded_bootstrap(local_indicies, &seed);
             compute_estimate(local_values, local_indicies, ${sub_n}, local_estimates + j);
 	    //printf("Completed compute_estimate for bootstrap number %d, subsample number %d \n", j, i);
-=======
 	if( !tid )
 	    printf("Thread %d starting subsample %d, time ellapsed %d\n", tid, i, time(NULL) - start);
         unsigned int* local_weights = bootstrap_weights+(${sub_n}*tid);
@@ -157,7 +147,6 @@ PyObject* compute_blb( PyObject* data ){
         for (int j=0; j < ${n_bootstraps}; j++) {
             permutation_bootstrap(local_weights, &bootstrap_seed);
             local_estimates[j] = compute_estimate(local_values, local_weights, ${sub_n});
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
         }
 	if( !tid )
 	    printf("Thread %d bootstraps accomplished for subsample %d, time ellapsed %d\n", tid, i, time(NULL) - start);
@@ -245,13 +234,6 @@ PyObject* compute_blb( PyObject* data ){
     printf("subsample_values: %x\n", (unsigned int) subsample_values);
     printf("bootstrap_indicies: %x\n", (unsigned int) bootstrap_indicies);
 
-<<<<<<< HEAD
-    printf("1");
-//    free(subsample_estimates);
-//    free(bootstrap_estimates);
-//    free(subsample_values);
-//    free(bootstrap_indicies);
-=======
     for( int i=0; i<${omp_n_teams};i++ ){
 	gsl_rng_free(rngs[i]);
     }
@@ -262,7 +244,6 @@ PyObject* compute_blb( PyObject* data ){
     free(subsample_estimates);
     free(bootstrap_estimates);
     free(bootstrap_weights);
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
 
 %if seq_type is UNDEFINED or seq_type == 'list':
     Py_DECREF( py_arr );

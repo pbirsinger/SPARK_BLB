@@ -11,7 +11,6 @@ USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
   seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
 
-<<<<<<< HEAD
 <%def name="bigrand( fname )">
 inline unsigned long ${fname}( unsigned int* seed ){
         unsigned long ret = rand_r(seed);
@@ -43,7 +42,9 @@ void subsample_and_load( float* data, float* out, unsigned int* seed ){
 void loaded_bootstrap( unsigned int* out, unsigned int * seed ){
         for( int i = 0; i<${vec_n}; i++ ){
             out[i] = boot_rand(seed) % ${vec_n};
-=======
+	}
+}
+
 #define DATA_SIZE ${n_data}
 #define SUBSAMPLE_SIZE ${sub_n}
 
@@ -72,7 +73,6 @@ void bootstrap( unsigned int* out, gsl_rng* rng ){
 void subsample_and_load( float* data, float* out, gsl_rng* rng ){
         for( int i = 0; i<${sub_n}; i++ ){
             out[i] = data[ gsl_rng_get(rng) % ${n_data} ];
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
         }
 }
 
@@ -96,7 +96,6 @@ PyObject* compute_blb( PyObject* data ){
 
   //note that these are never cleared; We always fill them up
   //with the appropriate data before perform calculations on them.
-<<<<<<< HEAD
   //float * subsample_estimates = (float*) calloc( ${n_subsamples}, sizeof(float) );
   float subsample_estimates[${n_subsamples * subsample_dim}];
   //float * subsample_values = (float*) calloc( ${sub_n}, sizeof(float) );
@@ -140,7 +139,6 @@ PyObject* compute_blb( PyObject* data ){
     %endfor
     if (hasNan) {
          printf("Bootstrap reduced for subsample %d: \n", i);
-=======
   float * subsample_estimates = (float*) calloc( ${n_subsamples}, sizeof(float) );
   float * subsample_values = (float*) calloc( ${sub_n}, sizeof(float) );
   unsigned int * bootstrap_weights = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
@@ -151,11 +149,8 @@ PyObject* compute_blb( PyObject* data ){
 
     subsample_and_load( c_arr, subsample_values, rng );
     for( int j=0; j<${n_bootstraps}; j++ ){
-
       bootstrap( bootstrap_weights, rng );
       bootstrap_estimates[j] = compute_estimate( subsample_values, bootstrap_weights, ${sub_n} );
-
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
     }
     %for l in xrange(subsample_dim):
     	 if (hasNan) {
@@ -168,19 +163,13 @@ PyObject* compute_blb( PyObject* data ){
   float theta = 0;
   average( subsample_estimates, ${n_subsamples}, &theta );
 
-//  free( subsample_estimates );
-//  free( bootstrap_indicies );
-//  free( bootstrap_estimates );
-//  free( subsample_values );
 
-<<<<<<< HEAD
-=======
   gsl_rng_free(rng);
   free( subsample_estimates );
   free( bootstrap_weights );
   free( bootstrap_estimates );
   free( subsample_values );
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
+
 %if seq_type is UNDEFINED or seq_type == 'list':
   Py_DECREF( py_arr );
 %endif

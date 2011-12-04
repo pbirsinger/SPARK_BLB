@@ -92,16 +92,10 @@ class BLB:
         rendered = blb_template.render( **fwk_args )
         
         
-<<<<<<< HEAD
         impl_args = {'dim': self.dim}
         impl_args['bootstrap_dim'] = impl_args['dim']
         impl_args['subsample_dim'] = impl_args['bootstrap_dim']
         impl_args['average_dim'] = impl_args['subsample_dim']
-=======
-        impl_args ={}
-	impl_args['n_data']= key[0]
-	impl_args['sub_n']=int(pow(key[0], self.subsample_len_exp))
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
         impl_attributes={}
         impl_args['attributes'] = impl_attributes
         if self.compute_estimate in BLB.known_reducers:
@@ -144,7 +138,6 @@ class BLB:
             subsample.extend(data[index*self.dim: (index+1)*self.dim])
         return subsample
 
-<<<<<<< HEAD
     def __bootstrap(self, data):
         bootstrap_vectors = [data[i*self.dim:(i+1)*self.dim] for i in xrange(len(data) / self.dim)]
         bootstrap = [random.choice(bootstrap_vectors) for i in xrange(len(data) / self.dim)]
@@ -153,12 +146,6 @@ class BLB:
             flat.extend(item)
         return flat
         
-=======
-    def __bootstrap(self, data, n):
-        bootstrap = [random.choice(data) for i in xrange(n)]
-        return bootstrap
-
->>>>>>> 895e8963812d9de0345657e9377a5a5f2445a8f8
     def set_includes(self, mod):
 	    gslroot = '/home/eecs/howard/gsl-1.15'
 	    mod.add_header('stdlib.h')
