@@ -40,7 +40,6 @@ float average( float * data, unsigned int size );
     }			 
     mean /= size;
 </%def>
-
 <%def name="weighted_mean()" >
     float mean = 0.0;
     for(unsigned int i=0; i<size; i++){
@@ -48,9 +47,6 @@ float average( float * data, unsigned int size );
     }
     mean /= DATA_SIZE;
 </%def>
-
-
-
 inline float update_mean( const float mu1, const float mu2, const unsigned int n1, const unsigned int n2 ){
      float delta = mu2 - mu1;
      return mu1 + (n2*delta)/(n1 + n2);
@@ -60,7 +56,6 @@ inline float update_var( const float mu1, const float mu2, const float var1, con
     float delta = mu2 - mu1;
     return (n1*var1 + n2*var2 + (n1*delta*n2*delta)/size)/size;
 }
-
 <%def name="weighted_stdev()">
     float mu_carry = 0.0;
     float mu_curr = 0.0;
