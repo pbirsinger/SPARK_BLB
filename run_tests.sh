@@ -1,2 +1,3 @@
 #!/bin/bash
-PYTHONPATH=. python tests/run_test.py
+python tests/run_test.py
+python tests/omp_tests.py

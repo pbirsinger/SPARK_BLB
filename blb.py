@@ -5,6 +5,7 @@ Main class representing the BLB algorithm.
 
 import random
 import numpy
+import asp.config
 
 class BLB:
     known_reducers= ['mean', 'stdev']
@@ -46,7 +47,7 @@ class BLB:
                 subsample = self.__subsample(data, self.subsample_len_exp)
                 bootstrap_estimates = [] 
                 for j in range(self.num_bootstraps):
-                    bootstrap = self.__bootstrap(subsample)
+                    bootstrap = self.__bootstrap(subsample, len(data))
                     estimate = self.compute_estimate(bootstrap)
                     bootstrap_estimates.append(estimate)
                 subsample_estimates.append(self.reduce_bootstraps(bootstrap_estimates))
@@ -88,6 +89,8 @@ class BLB:
         
         
         impl_args ={}
+	impl_args['n_data']= key[0]
+	impl_args['sub_n']=int(pow(key[0], self.subsample_len_exp))
         impl_attributes={}
         impl_args['attributes'] = impl_attributes
         if self.compute_estimate in BLB.known_reducers:
@@ -110,10 +113,11 @@ class BLB:
         rendered_impl = impl_template.render( **impl_args )
         
         import asp.jit.asp_module as asp_module
-        mod = asp_module.ASPModule()
+        mod = asp_module.ASPModule(specializer='BLB', cache_dir='/home/eecs/howard/asp_cache')
         mod.add_function('compute_estimate', rendered_impl)
         mod.add_function("compute_blb", rendered)
 
+ 
         self.set_compiler_flags(mod)
         self.set_includes(mod)
         f = open('blbout.cpp','w+')
@@ -126,16 +130,21 @@ class BLB:
         subsample = random.sample(data, subsample_len)
         return subsample
 
-    def __bootstrap(self, data):
-        bootstrap = [random.choice(data) for i in range(len(data))]
+    def __bootstrap(self, data, n):
+        bootstrap = [random.choice(data) for i in xrange(n)]
         return bootstrap
 
     def set_includes(self, mod):
-            mod.add_header('stdlib.h')
+	    gslroot = '/home/eecs/howard/gsl-1.15'
+	    mod.add_header('stdlib.h')
             mod.add_header('math.h')
             mod.add_header('time.h')
             mod.add_header('numpy/ndarrayobject.h')
-            
+	    mod.add_header('gsl_rng.h')
+	    mod.add_header('gsl_randist.h')
+	    mod.add_library( 'cblas', [], libraries=['cblas'] )
+            mod.add_library( 'gsl', [gslroot, gslroot+'/randist', gslroot+'/rng'],
+				[gslroot+'/.libs'], ['gsl'] )
             if self.with_cilk:
                 mod.add_header('cilk/cilk.h')
 		mod.add_header('cilk/cilk_api.h')
@@ -173,6 +182,7 @@ class BLB:
 
 	the key argument is a fingerprint key for this specialiser
         '''
+	platform = asp.config.PlatformDetector()
         # estimate cache line size
         ret = {}
         if key[1] is list:
@@ -186,8 +196,9 @@ class BLB:
         ret['n_bootstraps'] = self.num_bootstraps
         if self.with_openMP:
             # specialise this somehow.
-	    ret['omp_n_threads'] =  getattr(self, 'omp_n_threads', 1)
-	    print 'DEBUG: omp_n_threads = %d' % ret['omp_n_threads']
+	    ret['parallel_loop'] = 'teams'
+	    ret['omp_n_teams'] = min(4, getattr(self, 'omp_n_threads', 1))
+	    ret['omp_team_size'] = max( 1, getattr(self, 'omp_n_threads', 1) / ret['omp_n_teams'] )	
         elif self.with_cilk:
             ret['cilk_n_workers'] = getattr(self, 'cilk_n_workers', 1)
 	    print 'DEBUG: cilk_nworkers = %d' % ret['cilk_n_workers']

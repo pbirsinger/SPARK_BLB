@@ -5,13 +5,13 @@ from cref import *
 
 if __name__ == '__main__':
 
-    data = generate_data((GB,))
+    data = generate_data((16*GB,))
     print 'Data unpacked.'
     for i in [ 1, 2, 4, 8, 16, 32, 64 ]:
         tester = CBLB(num_subsamples=64, subsample_len_exp=0.7, with_openMP=True)
 	tester.omp_n_threads=i
 	# force compile
-	tester.run(data)
+	tester.compile_for(data)
 	print 'compilation complete. About to time...'
 	start = time.time()
 	tester.run(data)

@@ -16,16 +16,16 @@ def variance(sample):
 
 c_variance = """
     float mean = 0.0;
-    for( int i=0; i< size; i++ ){
-        mean += data[ indicies[i] ];
+    for( unsigned int i=0; i< size; i++ ){
+        mean += weights[i]*data[i];
     }
-    mean /= size;
+    mean /= DATA_SIZE;
     float var = 0.0;
-    for( int i=0; i<size; i++ ){
-        float datum = data[ indicies[i] ];
-        var += pow( datum - mean, 2 );
+    for( unsigned int i=0; i<size; i++ ){
+        float datum = (data[i] - mean);
+        var += weights[i]*datum*datum;
     }
-    return var / size;
+    return var / DATA_SIZE;
 """
 
 class MeanMean_BLB(BLB):
@@ -69,11 +69,11 @@ class SDSD_BLB(BLB):
     return mean(sample)
 
 class CMeanSD_BLB(BLB):
-    def __init__( self ):
+    def __init__( self, **kargs ):
         self.compute_estimate = 'stdev'
         self.reduce_bootstraps = 'mean'
         self.average = 'mean'
-        BLB.__init__( self )
+        BLB.__init__( self, **kargs )
 
 class CMeanMean_BLB(BLB):
   def __init__(self):
@@ -116,6 +116,9 @@ class CMeanVariance_BLB(BLB):
 def percent_error( true, measured ):
   return abs( float( measured - true )/true )
 
+# mean = 50.0, variance = 312.5, stdev = 17.67
+data  = [ 25.0 for i in xrange(2500) ] + [ 50.0 for i in xrange(5000) ] + [ 75.0 for i in xrange(2500) ]
+
 BLB_FAIL_MSG = 'Test Case: %s; Python result: %f; C result: %f; Percent Error: %f'
 class BLBTest(unittest.TestCase):
   def setUp(self):
@@ -126,8 +129,6 @@ class BLBTest(unittest.TestCase):
     """
     Ensure that basic computations are accurate.
     """
-    ## biased to prevent small-argument errors
-    data = [ 100 + random.random() for i in xrange(10000) ]
     # mean of mean
     py_blb = MeanMean_BLB()
     c_blb = CMeanMean_BLB()
@@ -142,21 +143,6 @@ class BLBTest(unittest.TestCase):
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Mean of SD', py_res, c_res, p) )
-    # stdev of mean
-    py_blb = SDMean_BLB()
-    c_blb = CSDMean_BLB()
-    py_res = py_blb.run(data)
-    c_res = c_blb.run(data)
-    p = percent_error(py_res, c_res)
-    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of Mean', py_res, c_res, p) )
-    # stdev of stdev
-    py_blb = SDSD_BLB()
-    c_blb = CSDSD_BLB()
-    py_res = py_blb.run(data)
-    c_res = c_blb.run(data)
-    p = percent_error(py_res, c_res)
-    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of SD', py_res, c_res, p) )
-
 
   def test_numnpy(self):
     """
@@ -177,7 +163,6 @@ class BLBTest(unittest.TestCase):
     Ensure custom c functions as classifiers work.
     (Assuming they are correctly written!)
     """
-    data = [ random.random() for i in xrange(10000) ]
     py_blb = MeanVariance_BLB()
     py_res = py_blb.run(data)
     c_blb = CMeanVariance_BLB()
