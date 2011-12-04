@@ -57,16 +57,16 @@ def variance(sample):
 
 c_variance = """
     float mean = 0.0;
-    for( int i=0; i< size; i++ ){
-        mean += data[ indicies[i] ];
+    for( unsigned int i=0; i< size; i++ ){
+        mean += weights[i]*data[i];
     }
-    mean /= size;
+    mean /= DATA_SIZE;
     float var = 0.0;
-    for( int i=0; i<size; i++ ){
-        float datum = data[ indicies[i] ];
-        var += pow( datum - mean, 2 );
+    for( unsigned int i=0; i<size; i++ ){
+        float datum = (data[i] - mean);
+        var += weights[i]*datum*datum;
     }
-    return var / size;
+    return var / DATA_SIZE;
 """
 
 def flatten(sample):
@@ -136,7 +136,7 @@ class SDSD_BLB(BLB):
     return norm(mean_vec)
 
 class CMeanSD_BLB(BLB):
-    def __init__( self ):
+    def __init__( self, **kargs ):
         self.compute_estimate = 'stdev'
         self.reduce_bootstraps = 'mean'
         self.average = 'mean_norm'
