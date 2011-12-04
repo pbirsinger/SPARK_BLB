@@ -71,7 +71,7 @@ if __name__ == '__main__':
         pass
     bias = (time.clock() - start)/float(n_iters)
     
-    for size in [ 4, 10, 16, 25, 50, 64, 100, 256 ]:
+    for size in [ .1, 4, 10, 16, 25, 50, 64, 100, 256 ]:
         
     
         datas = make_data( size * 1000 )

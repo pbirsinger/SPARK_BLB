@@ -7,10 +7,11 @@ import random
 import numpy
 
 class BLB:
-    known_reducers= ['mean', 'stdev']
-    def __init__(self, num_subsamples=100, num_bootstraps=25, 
+    known_reducers= ['mean', 'stdev', 'mean_norm']
+    def __init__(self, num_subsamples=25, num_bootstraps=100, 
                  subsample_len_exp=0.5, with_cilk=False, with_openMP=False):
 
+        self.dim = 8
         self.with_cilk=with_cilk
 	self.with_openMP = with_openMP
         self.pure_python = False
@@ -49,7 +50,10 @@ class BLB:
                     bootstrap = self.__bootstrap(subsample)
                     estimate = self.compute_estimate(bootstrap)
                     bootstrap_estimates.append(estimate)
-                subsample_estimates.append(self.reduce_bootstraps(bootstrap_estimates))
+                    print "***PYTHON bootstrap estimate for bootstrap " + str(j) + " and subsample " + str(i) + " is " + str(estimate)
+                subsample_est = self.reduce_bootstraps(bootstrap_estimates)
+                subsample_estimates.append(subsample_est)
+                print "***PYTHON subsample estimate for subsample " + str(i) + " is " + str(subsample_est)
             return self.average(subsample_estimates)
         else:
             f = self.fingerprint(data)
@@ -87,7 +91,10 @@ class BLB:
         rendered = blb_template.render( **fwk_args )
         
         
-        impl_args ={}
+        impl_args = {'dim': self.dim}
+        impl_args['bootstrap_dim'] = impl_args['dim']
+        impl_args['subsample_dim'] = impl_args['bootstrap_dim']
+        impl_args['average_dim'] = impl_args['subsample_dim']
         impl_attributes={}
         impl_args['attributes'] = impl_attributes
         if self.compute_estimate in BLB.known_reducers:
@@ -123,13 +130,20 @@ class BLB:
 
     def __subsample(self, data, subsample_len_exp):
         subsample_len = int(len(data) ** subsample_len_exp)
-        subsample = random.sample(data, subsample_len)
+        subsample_indicies = random.sample(range(len(data) / self.dim), subsample_len)
+        subsample = []
+        for index in subsample_indicies:
+            subsample.extend(data[index*self.dim: (index+1)*self.dim])
         return subsample
 
     def __bootstrap(self, data):
-        bootstrap = [random.choice(data) for i in range(len(data))]
-        return bootstrap
-
+        bootstrap_vectors = [data[i*self.dim:(i+1)*self.dim] for i in xrange(len(data) / self.dim)]
+        bootstrap = [random.choice(bootstrap_vectors) for i in xrange(len(data) / self.dim)]
+        flat = []
+        for item in bootstrap:
+            flat.extend(item)
+        return flat
+        
     def set_includes(self, mod):
             mod.add_header('stdlib.h')
             mod.add_header('math.h')
@@ -179,11 +193,17 @@ class BLB:
             ret['seq_type'] = 'list'
         elif key[1] is numpy.ndarray:
             ret['seq_type'] = 'ndarray'
+        ret['dim'] = 8
         ret['bootstrap_unroll'] = 1
         ret['sub_n'] = int( pow( key[0], self.subsample_len_exp ) )
+        ret['vec_n'] = int( pow( key[0] / ret['dim'], self.subsample_len_exp ) )
         ret['n_data'] = key[0]
+        ret['n_vec'] = key[0] / ret['dim']
         ret['n_subsamples'] = self.num_subsamples
         ret['n_bootstraps'] = self.num_bootstraps
+        ret['bootstrap_dim'] = ret['dim']
+        ret['subsample_dim'] = ret['bootstrap_dim']
+        ret['average_dim'] = ret['subsample_dim']
         if self.with_openMP:
             # specialise this somehow.
 	    ret['omp_n_threads'] =  getattr(self, 'omp_n_threads', 1)

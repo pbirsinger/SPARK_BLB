@@ -66,7 +66,7 @@ PyObject* compute_blb( PyObject* data ){
   float * subsample_estimates = (float*) calloc( ${n_subsamples}, sizeof(float) );
   float * subsample_values = (float*) calloc( ${sub_n*(cilk_n_workers+1)}, sizeof(unsigned int) );    
   unsigned int * bootstrap_indicies = (unsigned int*) calloc( ${sub_n*(1+cilk_n_workers)}, sizeof(unsigned int) );
-  float * bootstrap_estimates =  (float*) calloc( ${n_bootstraps*(cilk_n_workers+1)}, sizeof(float) );
+  float ** bootstrap_estimates =  (float*) calloc( ${n_bootstraps*(cilk_n_workers+1)}, sizeof(float) );
   unsigned int* cells = (unsigned int*) calloc( ${cilk_n_workers+1}, sizeof(unsigned int) );
   
   __cilkrts_end_cilk();
@@ -91,7 +91,7 @@ PyObject* compute_blb( PyObject* data ){
         unsigned int tid = __cilkrts_get_worker_number();
 	float * local_values = subsample_values+(tid*${sub_n});
     	subsample_and_load(c_arr, local_values, cells+tid );
-	float * local_estimates = bootstrap_estimates+(tid*${n_bootstraps});
+	float ** local_estimates = bootstrap_estimates+(tid*${n_bootstraps});
     	for(int j = 0; j<${n_bootstraps}; j++ ){
 
 	   unsigned int* local_indicies = bootstrap_indicies+(tid*${sub_n});
