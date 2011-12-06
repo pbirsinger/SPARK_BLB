@@ -37,15 +37,24 @@ float* average( float * data, unsigned int size );
    %if input_dim == 1:
       float mean = 0.0;
       for (unsigned int i=0; i<size; i++) {
+      	  %if access is UNDEFINED:
+	      print "access is undefined"
+	  %endif
           mean += *(${access});
       }
       mean /= size;
       result[0] = sqrt(mean * mean); //norm
    %else:
+   %if input_dim is UNDEFINED:
+       print "input_dim is undefined"
+   %endif
    float mean_vec[${input_dim}];
     %if iter_direct:
     float* initial=data;
     %else:
+    %if input_dim is UNDEFINED:
+    	print "input_dim is undefined"
+    %endif
     float* initial= data+(indicies[0]*${input_dim});
     %endif
     %for k in xrange(input_dim):
@@ -104,6 +113,9 @@ float* average( float * data, unsigned int size );
     %endfor
 
     for (unsigned int i=1; i<size; i++) {
+    	 %if access is UNDEFINED:
+	     print "access is undefined"
+	 %endif
          float* vec = ${access};
     	 %for k in xrange(input_dim):
              result[${k}] +=  vec[${k}];
@@ -113,82 +125,121 @@ float* average( float * data, unsigned int size );
     	 result[${j}] /= size;
     //printf("Mean computed: %f\n", result[0]); 
     %endfor
-    %endif
+  %endif
+</%def>
+
 
 #define LINE_SIZE 64
 #define MIN(a,b) ((a>b)?(b):(a))
 #define DATA_SIZE ${n_data}
 #define SUBSAMPLE_SIZE ${sub_n}
 
+
 ##Spits out the body of a mean calculation, sans declaration or return statement.
-<%def name="mean()">
+<%def name="simple_mean()">
     float mean = 0.0;
     for( unsigned int i=0; i<size; i++ ){
        mean += data[i];
     }			 
     mean /= size;
 </%def>
-<%def name="weighted_mean()" >
-    float mean = 0.0;
-    for(unsigned int i=0; i<size; i++){
-	mean += data[i]*weights[i];
+
+<%def name="weighted_mean(input_dim, output_dim)" >
+      <%
+        i = 'i' if iter_direct else 'indicies[i]'
+        access = 'data + %s*%s ' % (i, input_dim)
+      %>
+
+    float* initial= data+(indicies[0]*${input_dim});
+    %for k in xrange(input_dim):
+    result[${k}] = weights[0]*initial[${k}];
+    %endfor
+    for (unsigned int i=1; i<size; i++) {
+         float* vec = ${access};
+         %for k in xrange(input_dim):
+             result[${k}] += weights[${k}] vec[${k}];
+         %endfor
     }
-    mean /= DATA_SIZE;
+    %for j in xrange(input_dim):
+         result[${j}] /= size;
+    %endfor
+
 </%def>
+
 inline float update_mean( const float mu1, const float mu2, const unsigned int n1, const unsigned int n2 ){
      float delta = mu2 - mu1;
      return mu1 + (n2*delta)/(n1 + n2);
 }
+
 inline float update_var( const float mu1, const float mu2, const float var1, const float var2, const unsigned int n1, const unsigned n2 ){
     int size = n1 + n2;
     float delta = mu2 - mu1;
     return (n1*var1 + n2*var2 + (n1*delta*n2*delta)/size)/size;
 }
-<%def name="weighted_stdev()">
-    float mu_carry = 0.0;
-    float mu_curr = 0.0;
-    float var_carry = 0.0;
-    float var_curr = 0.0;
+
+<%def name="weighted_stdev(input_dim, output_dim)">
+    float mu_carry[input_dim]; //Mean of all the data elements seen before current cache block
+    float mu_curr[input_dim]; //Accumulator for current cache block
+    float var_carry[input_dim];
+    float var_curr[input_dim];
     int k = 0;
-    unsigned int sum_weights = 0;
+    unsigned int sum_weights = 0; //For current cache block
     unsigned int sum_weights_cum = 0;
     for( int i= 0; i<size/LINE_SIZE; i++ ){
 	for( int j = k; j<k+LINE_SIZE; j++ ){
-	    mu_curr += data[j]*weights[j];
+	    for (int l=0; l<${input_dim}; l++) {
+	    	mu_curr[l] += data[(j*${input_dim}) + l]*weights[j];
+	    }
 	    sum_weights += weights[j];
 	}
-	mu_curr /= sum_weights;
-	for( int j= k; j<k+LINE_SIZE; j++ ){
-	    float residual = data[j] - mu_curr;
-	    var_curr += weights[j]*residual*residual;
+	for (int l=0; l<${input_dim}; l++) {
+	    mu_curr /= sum_weights;
 	}
-	var_curr /= sum_weights;
-	var_carry = update_var( mu_carry, mu_curr, var_carry, var_curr, sum_weights_cum, sum_weights );
-	mu_carry = update_mean( mu_carry, mu_curr, sum_weights_cum, sum_weights );
+	for( int j= k; j<k+LINE_SIZE; j++ ){
+	    for (int l=0; l<${input_dim}; l++) {
+	    	float residual = data[(j*${input_dim}+l] - mu_curr[l];
+		var_curr[l] += weights[j] * residual * residual;
+	    }
+	}
+	for (int l=0; l<${input_dim}; l++) {
+	    var_curr[l] /= sum_weights;
+	    var_carry[l] = update_var( mu_carry[l], mu_curr[l], var_carry[l], var_curr[l], sum_weights_cum, sum_weights );
+	    mu_carry[l] = update_mean( mu_carry[l], mu_curr[l], sum_weights_cum, sum_weights );
+	}
 	sum_weights_cum += sum_weights;
-	mu_curr =  var_curr = 0.0;
+	for (int l=0; l<${input_dim}; l++) {
+	    mu_curr[l] =  var_curr[l] = 0.0;
+	}
 	sum_weights = 0;
 	k += LINE_SIZE;
     }
     // The leftovers
     for( int j=k; j<size; j++ ){
-	mu_curr += weights[j]*data[j];
+    	for (int l=0; l<${input_dim}; l++) {
+	    mu_curr[l] += weights[j]*data[(j*${input_dim})+l];
+	}
 	sum_weights += weights[j];
     }
     mu_curr /= sum_weights;
     for( int j = k; j<size; j++ ){
-	float residual = data[j] - mu_curr;
-	var_curr += weights[j]*residual*residual;
+    	for (int l=0; l<${input_dim}; l++) {
+	    float residual = data[(j*${input_dim})+l] - mu_curr[l];
+	    var_curr[l] += weights[j]*residual*residual;
+	}
     }
-    var_curr /= sum_weights;
-    var_carry = update_var( mu_carry, mu_curr, var_carry, var_curr, sum_weights_cum, sum_weights);
+    for (int l=0; l<${input_dim}; l++) {
+    	var_curr[l] /= sum_weights;
+    	var_carry[l] = update_var( mu_carry, mu_curr, var_carry, var_curr, sum_weights_cum, sum_weights);
     float stdev = sqrt( var_carry );
+    }
 </%def>
+
 ##Spits out the body of a standard deviation calculation, like unto mean defined above.
 <%def name="stdev(iter_direct, input_dim, output_dim )">
       <%
 	access = 'data+i*%d' %input_dim if iter_direct else 'data + indicies[i]*%d ' %input_dim
       %>
+      
     float mean[${input_dim}];
     %if iter_direct:
     	float* initial=data;
@@ -233,7 +284,9 @@ inline float update_var( const float mu1, const float mu2, const float var1, con
     	result[j] /= size;
 	result[j] = sqrt(result[j]);
     }
-<%def name="stdev()">
+</%def>
+
+<%def name="simple_stdev()">
     float mu_carry = 0.0;
     float mu_curr = 0.0;
     float var_carry = 0.0;

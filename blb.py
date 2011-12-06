@@ -48,13 +48,13 @@ class BLB:
                 subsample = self.__subsample(data, self.subsample_len_exp)
                 bootstrap_estimates = [] 
                 for j in range(self.num_bootstraps):
-                    bootstrap = self.__bootstrap(subsample, len(data))
+                    bootstrap = self.__bootstrap(subsample)
                     estimate = self.compute_estimate(bootstrap)
                     bootstrap_estimates.append(estimate)
-                    print "***PYTHON bootstrap estimate for bootstrap " + str(j) + " and subsample " + str(i) + " is " + str(estimate)
+#                    print "***PYTHON bootstrap estimate for bootstrap " + str(j) + " and subsample " + str(i) + " is " + str(estimate)
                 subsample_est = self.reduce_bootstraps(bootstrap_estimates)
                 subsample_estimates.append(subsample_est)
-                print "***PYTHON subsample estimate for subsample " + str(i) + " is " + str(subsample_est)
+#                print "***PYTHON subsample estimate for subsample " + str(i) + " is " + str(subsample_est)
             return self.average(subsample_estimates)
         else:
             f = self.fingerprint(data)
@@ -96,6 +96,9 @@ class BLB:
         impl_args['bootstrap_dim'] = impl_args['dim']
         impl_args['subsample_dim'] = impl_args['bootstrap_dim']
         impl_args['average_dim'] = impl_args['subsample_dim']
+        impl_args['n_data'] = key[0]
+        impl_args['sub_n'] = int( pow( key[0], self.subsample_len_exp ) )
+        impl_args['vec_n'] = int( pow( key[0] / impl_args['dim'], self.subsample_len_exp ) )
         impl_attributes={}
         impl_args['attributes'] = impl_attributes
         if self.compute_estimate in BLB.known_reducers:
@@ -118,7 +121,7 @@ class BLB:
         rendered_impl = impl_template.render( **impl_args )
         
         import asp.jit.asp_module as asp_module
-        mod = asp_module.ASPModule(specializer='BLB', cache_dir='/home/eecs/howard/asp_cache')
+        mod = asp_module.ASPModule(specializer='BLB')
         mod.add_function('compute_estimate', rendered_impl)
         mod.add_function("compute_blb", rendered)
 
@@ -147,7 +150,7 @@ class BLB:
         return flat
         
     def set_includes(self, mod):
-	    gslroot = '/home/eecs/howard/gsl-1.15'
+	    gslroot = '/home/vagrant/gsl-1.15/'
 	    mod.add_header('stdlib.h')
             mod.add_header('math.h')
             mod.add_header('time.h')

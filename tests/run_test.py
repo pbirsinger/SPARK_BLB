@@ -7,7 +7,7 @@ DIM = 8
 
 def mean(sample, dim):
   if dim == 1:
-    print sample
+    #print sample
     avg = 0.0
     for i in xrange(len(sample)):
       avg += sample[i]
@@ -105,10 +105,10 @@ class SDMean_BLB(BLB):
   def average(self, sample):
     sample = flatten(sample)
     mean_vec = mean(sample, DIM)
-    print "Average vector for python "
-    print mean_vec
-    print "\n"
-    return norm(mean_vec)
+#    print "Average vector for python "
+#    print mean_vec
+#    print "\n"
+#    return norm(mean_vec)
 
 class MeanSD_BLB(BLB):
   def compute_estimate(self, sample):
@@ -216,41 +216,41 @@ class BLBTest(unittest.TestCase):
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-    if (p<= self.threshold): 
-      print "Mean of Mean passed"
+#    if (p<= self.threshold): 
+#      print "Mean of Mean passed"
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Mean of Mean', py_res, c_res, p) )
 
     # mean of stdev
-    print "Computing MEAN of STDEV"
+#    print "Computing MEAN of STDEV"
     py_blb = MeanSD_BLB()
     c_blb = CMeanSD_BLB()
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-    if (p<= self.threshold):
-      print "Mean of SD passed"
+#    if (p<= self.threshold):
+#      print "Mean of SD passed"
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Mean of SD', py_res, c_res, p) )
 
     # stdev of mean
-    print "Computing STDEV of MEAN"
+#    print "Computing STDEV of MEAN"
     py_blb = SDMean_BLB()
     c_blb = CSDMean_BLB()
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-    if (p <= self.threshold):
-      print "SD of mean passed"
+#    if (p <= self.threshold):
+#      print "SD of mean passed"
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of Mean', py_res, c_res, p) )
 
     # stdev of stdev
-    print "Computing STDEV of STDEV"
+#    print "Computing STDEV of STDEV"
     py_blb = SDSD_BLB()
     c_blb = CSDSD_BLB()
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-    if (p <= self.threshold):
-      print "SD of SD passed"
+#    if (p <= self.threshold):
+#      print "SD of SD passed"
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of SD', py_res, c_res, p) )
 
 
@@ -259,7 +259,7 @@ class BLBTest(unittest.TestCase):
     Ensure the numpy c version works.
     """
     #data = [ random.random() for i in xrange(10000) ]
-    print "Computing SD of MEAN"
+#    print "Computing SD of MEAN"
     py_blb = SDMean_BLB()
     py_res = py_blb.run(data)
     c_blb = CSDMean_BLB()

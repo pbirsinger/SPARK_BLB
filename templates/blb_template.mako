@@ -110,35 +110,8 @@ PyObject* compute_blb( PyObject* data ){
     for( int j=0; j<${n_bootstraps}; j++ ){
       loaded_bootstrap( bootstrap_indicies, &cell );
       compute_estimate( subsample_values, bootstrap_indicies, ${vec_n}, bootstrap_estimates + j*${bootstrap_dim} );
-      unsigned int k = j*${bootstrap_dim};
-      bool hasNan = false;
-      %for l in xrange(bootstrap_dim):
-      	   if (bootstrap_estimates[k + ${l}] != bootstrap_estimates[k + ${l}]) {
-	      hasNan = true;
-	   }
-      %endfor
-      if (hasNan) {
-            printf("Estimate computed for bootstrap %d in subsample %d: ", j, i);
-      }
-      %for l in xrange(bootstrap_dim):
-      	   if (hasNan) {
-	       printf("%f ", bootstrap_estimates[k + ${l}]);
-	   }
-      %endfor
-      if (hasNan) {
-          printf("\n");
-      }
     }
     reduce_bootstraps( bootstrap_estimates, ${n_bootstraps}, subsample_estimates + i*${subsample_dim} );
-    unsigned int m = i * ${subsample_dim};
-    bool hasNan = false;
-    %for l in xrange(subsample_dim):
-    	 if (subsample_estimates[m+${l}] != subsample_estimates[m+${l}]) {
-	    hasNan = true;
-	 }
-    %endfor
-    if (hasNan) {
-         printf("Bootstrap reduced for subsample %d: \n", i);
   float * subsample_estimates = (float*) calloc( ${n_subsamples}, sizeof(float) );
   float * subsample_values = (float*) calloc( ${sub_n}, sizeof(float) );
   unsigned int * bootstrap_weights = (unsigned int*) calloc( ${sub_n}, sizeof(unsigned int) );
@@ -152,11 +125,6 @@ PyObject* compute_blb( PyObject* data ){
       bootstrap( bootstrap_weights, rng );
       bootstrap_estimates[j] = compute_estimate( subsample_values, bootstrap_weights, ${sub_n} );
     }
-    %for l in xrange(subsample_dim):
-    	 if (hasNan) {
-    	    printf("%f ", subsample_estimates[m + ${l}]);
-	 }
-    %endfor
     printf("\n");
   }
 
