@@ -5,14 +5,19 @@ from cref import *
 
 if __name__ == '__main__':
 
-    data = generate_data((16*GB,))
+    dsize = long(8*GB)
+    sizes = [ 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64 ]
+    testers = {}
+    for i in sizes:
+	tester = CBLB(num_subsamples=64, subsample_len_exp=0.7, with_openMP=True, dimension=(2**18))
+	tester.omp_n_threads = i
+	tester.compile_for( [], key=( dsize, numpy.ndarray ) )
+	testers[ i ] = tester
+
+    data = generate_data((dsize,))
     print 'Data unpacked.'
-    for i in [ 1, 2, 4, 8, 16, 32, 64 ]:
-        tester = CBLB(num_subsamples=64, subsample_len_exp=0.7, with_openMP=True)
-	tester.omp_n_threads=i
-	# force compile
-	tester.compile_for(data)
-	print 'compilation complete. About to time...'
+    for i in sizes:
+        tester = testers[i]
 	start = time.time()
 	tester.run(data)
 	ellapsed = time.time()

@@ -8,11 +8,12 @@ import numpy
 import asp.config
 
 class BLB:
-    known_reducers= ['mean', 'stdev', 'mean_norm']
+    known_reducers= ['mean', 'stdev', 'mean_norm', 'noop']
     def __init__(self, num_subsamples=25, num_bootstraps=100, 
-                 subsample_len_exp=0.5, with_cilk=False, with_openMP=False):
+                 subsample_len_exp=0.5, with_cilk=False, with_openMP=False,
+	   	 dimension=1):
 
-        self.dim = 8
+        self.dim = dimension
         self.with_cilk=with_cilk
 	self.with_openMP = with_openMP
         self.pure_python = False
@@ -31,8 +32,6 @@ class BLB:
         self.num_bootstraps = num_bootstraps
         self.subsample_len_exp = subsample_len_exp
         self.cached_mods = {}
-
-
     
     def fingerprint(self, data):
         """
@@ -84,23 +83,25 @@ class BLB:
             template_name = 'blb_cilk.mako'
         else:
             template_name = 'blb_template.mako'
-            
+ 
         fwk_args = self.set_framework_args(key)
         import asp.codegen.templating.template as template
         blb_template = template.Template(filename="templates/%s" % template_name, disable_unicode=True)
         impl_template = template.Template(filename="templates/blb_impl.mako", disable_unicode=True)
         rendered = blb_template.render( **fwk_args )
         
-        
+	if key[0] % self.dim != 0:
+	    raise ValueError( 'Data must be of dimension %d' % self.dim )
+	n_vecs = key[0] / self.dim
+	vec_n = int( pow( n_vecs, self.subsample_len_exp ) )
         impl_args = {'dim': self.dim}
         impl_args['bootstrap_dim'] = impl_args['dim']
         impl_args['subsample_dim'] = impl_args['bootstrap_dim']
         impl_args['average_dim'] = impl_args['subsample_dim']
         impl_args['n_data'] = key[0]
         impl_args['sub_n'] = int( pow( key[0], self.subsample_len_exp ) )
-        impl_args['vec_n'] = int( pow( key[0] / impl_args['dim'], self.subsample_len_exp ) )
-        impl_attributes={}
-        impl_args['attributes'] = impl_attributes
+        impl_args['vec_n'] = vec_n
+	impl_args['n_vecs'] = n_vecs 
         if self.compute_estimate in BLB.known_reducers:
             impl_args['use_classifier'] = self.compute_estimate
         else:
@@ -116,12 +117,10 @@ class BLB:
         else:
             impl_args['subsample_reducer'] = self.average
 
-        impl_attributes['with_cilk'] = self.with_cilk
-
         rendered_impl = impl_template.render( **impl_args )
         
         import asp.jit.asp_module as asp_module
-        mod = asp_module.ASPModule(specializer='BLB')
+        mod = asp_module.ASPModule(specializer='BLB', cache_dir='/home/eecs/howard/asp_cache')
         mod.add_function('compute_estimate', rendered_impl)
         mod.add_function("compute_blb", rendered)
 
@@ -150,7 +149,7 @@ class BLB:
         return flat
         
     def set_includes(self, mod):
-	    gslroot = '/home/vagrant/gsl-1.15/'
+	    gslroot = '/home/eecs/howard/gsl-1.15/'
 	    mod.add_header('stdlib.h')
             mod.add_header('math.h')
             mod.add_header('time.h')
@@ -204,12 +203,11 @@ class BLB:
             ret['seq_type'] = 'list'
         elif key[1] is numpy.ndarray:
             ret['seq_type'] = 'ndarray'
-        ret['dim'] = 8
-        ret['bootstrap_unroll'] = 1
+        ret['dim'] = self.dim
         ret['sub_n'] = int( pow( key[0], self.subsample_len_exp ) )
-        ret['vec_n'] = int( pow( key[0] / ret['dim'], self.subsample_len_exp ) )
+        ret['vec_n'] = int( pow( key[0] / self.dim, self.subsample_len_exp ) )
         ret['n_data'] = key[0]
-        ret['n_vec'] = key[0] / ret['dim']
+        ret['n_vecs'] = key[0] / self.dim
         ret['n_subsamples'] = self.num_subsamples
         ret['n_bootstraps'] = self.num_bootstraps
         ret['bootstrap_dim'] = ret['dim']
@@ -217,9 +215,8 @@ class BLB:
         ret['average_dim'] = ret['subsample_dim']
         if self.with_openMP:
             # specialise this somehow.
-	    ret['parallel_loop'] = 'teams'
-	    ret['omp_n_teams'] = min(4, getattr(self, 'omp_n_threads', 1))
-	    ret['omp_team_size'] = max( 1, getattr(self, 'omp_n_threads', 1) / ret['omp_n_teams'] )	
+	    ret['parallel_loop'] = 'outer'
+	    ret['omp_n_threads'] = getattr(self, 'omp_n_threads', 1 )
         elif self.with_cilk:
             ret['cilk_n_workers'] = getattr(self, 'cilk_n_workers', 1)
 	    print 'DEBUG: cilk_nworkers = %d' % ret['cilk_n_workers']

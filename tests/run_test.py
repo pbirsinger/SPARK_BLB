@@ -5,52 +5,44 @@ from blb import *
 
 DIM = 8
 
-def mean(sample, dim):
-  if dim == 1:
-    #print sample
-    avg = 0.0
-    for i in xrange(len(sample)):
-      avg += sample[i]
-#    print "Mean computed (python): " + str(avg)
-    return avg / len(sample)
-
-#make sure data is homogeneous
-#  for i in xrange(dim):
-#    print str(sample[i]) + " "
-#  print '\n'
-  avg = [0.0]*dim
-  for i in xrange(len(sample)):
-    avg[i % dim] += sample[i]
-  for j in xrange(dim):
-    avg[j] /= (len(sample) / dim)
-#  print "Mean computed (python): " + str(avg)
-  return avg
+def mean(sample, dim, verify=False ):
+    if dim == 1:
+        #print sample
+        avg = 0.0
+        for i in xrange(len(sample)):
+            avg += sample[i]
+        if verify:
+	    print "Mean computed (python): " + str(avg)
+        return avg / len(sample)
+    else:
+        avg = [0.0]*dim
+        for i in xrange(len(sample)):
+            avg[i % dim] += sample[i]
+	for j in xrange(dim):
+	    avg[j] /= (len(sample) / dim)
+	if verify:
+	    print "Mean computed (python): " + str(avg)
+        return avg
 
 def stddev(sample, dim):
-  if dim == 1:
-    avg = mean(sample, dim);
-    stdev = 0.0
-    for i in xrange(len(sample)):
-      stdev += (sample[i] - avg) ** 2
-    stdev /= len(sample)
-#    print "STDEV computed (python): " + str(math.sqrt(stdev))
-    return math.sqrt(stdev)
-  dev = [0.0] * dim
-  mean_vec = mean(sample, dim)
-  for vec in [ sample[i*dim:(i+1)*dim] for i in xrange(len(sample)/dim)] :
-    for j in xrange(dim):
-      dev[j] += (vec[j] - mean_vec[j])**2
-  for j in xrange(dim):
-    dev[j] /= len(sample) / dim
-    dev[j] = math.sqrt(dev[j])
-  return dev
+    if dim == 1:
+        avg = mean(sample, dim);
+        stdev = 0.0
+        for i in xrange(len(sample)):
+            stdev += (sample[i] - avg) ** 2
+        stdev /= len(sample)
+        return math.sqrt(stdev)
+    else:
+        dev = [0.0] * dim
+        mean_vec = mean(sample, dim)
+        for vec in [ sample[i*dim:(i+1)*dim] for i in xrange(len(sample)/dim)] :
+            for j in xrange(dim):
+	        dev[j] += (vec[j] - mean_vec[j])**2
+	for j in xrange(dim):
+	    dev[j] /= len(sample) / dim
+	    dev[j] = math.sqrt(dev[j])
+        return dev
     
-def squaredNorm(vec, dim):
-  norm = 0.0
-  for i in xrange(dim):
-    norm += vec[i] * vec[i]
-  return norm
-
 def variance(sample):
   mn = mean(sample, DIM)
   return stddev(sample)**2
@@ -76,9 +68,7 @@ def flatten(sample):
   return flat
 
 def norm(mean_vec):
-  norm = 0.0
-  for i in xrange(len(mean_vec)):
-    norm += mean_vec[i] ** 2
+  norm = reduce( float.__add__, [ x*x for x in mean_vec ] )
   return math.sqrt(norm)
 
 
@@ -92,23 +82,23 @@ class MeanMean_BLB(BLB):
 
   def average(self, sample):
     sample = flatten(sample)
-    mean_vec = mean(sample, DIM)
-    return norm(mean_vec)
+    mean_vec = mean(sample, DIM, True)
+    x = norm( mean_vec )
+    print 'Python Mean of Mean: %f' % x
+    return x
 
 class SDMean_BLB(BLB):
   def compute_estimate(self, sample):
     return mean(sample, DIM)
 
   def reduce_bootstraps(self, sample):
+    print stddev([ vec[0] for vec in sample ], 1)
     return stddev(flatten(sample), DIM)
 
   def average(self, sample):
     sample = flatten(sample)
     mean_vec = mean(sample, DIM)
-#    print "Average vector for python "
-#    print mean_vec
-#    print "\n"
-#    return norm(mean_vec)
+    return norm(mean_vec)
 
 class MeanSD_BLB(BLB):
   def compute_estimate(self, sample):
@@ -140,7 +130,7 @@ class CMeanSD_BLB(BLB):
         self.compute_estimate = 'stdev'
         self.reduce_bootstraps = 'mean'
         self.average = 'mean_norm'
-        BLB.__init__( self )
+        BLB.__init__( self, **kargs )
 
 class CMeanMean_BLB(BLB):
   def __init__(self):
@@ -216,8 +206,6 @@ class BLBTest(unittest.TestCase):
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-#    if (p<= self.threshold): 
-#      print "Mean of Mean passed"
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Mean of Mean', py_res, c_res, p) )
 
     # mean of stdev
@@ -254,19 +242,19 @@ class BLBTest(unittest.TestCase):
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of SD', py_res, c_res, p) )
 
 
-  def test_numnpy(self):
-    """
-    Ensure the numpy c version works.
-    """
-    #data = [ random.random() for i in xrange(10000) ]
+#  def test_numnpy(self):
+#    """
+#    Ensure the numpy c version works.
+#    """
+#    #data = [ random.random() for i in xrange(10000) ]
 #    print "Computing SD of MEAN"
-    py_blb = SDMean_BLB()
-    py_res = py_blb.run(data)
-    c_blb = CSDMean_BLB()
-    npy_data = numpy.array(data, dtype='float32')
-    c_res = c_blb.run(npy_data)
-    p = percent_error(py_res, c_res)
-    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Numpy Test', py_res, c_res, p) )
+#    py_blb = SDMean_BLB()
+#    py_res = py_blb.run(data)
+#    c_blb = CSDMean_BLB()
+#    npy_data = numpy.array(data, dtype='float32')
+#    c_res = c_blb.run(npy_data)
+#    p = percent_error(py_res, c_res)
+#    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Numpy Test', py_res, c_res, p) )
 
 
   def test_custom(self):
@@ -275,7 +263,6 @@ class BLBTest(unittest.TestCase):
     (Assuming they are correctly written!)
     """
     """
-    #data = [ random.random() for i in xrange(10000) ]
     py_blb = MeanVariance_BLB()
     py_res = py_blb.run(data)
     c_blb = CMeanVariance_BLB()

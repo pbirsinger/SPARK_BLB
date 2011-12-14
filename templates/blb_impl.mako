@@ -28,304 +28,259 @@ float* average( float * data, unsigned int size );
 
 </%doc>
 
+<%def name="noop( weighted, input_dim, output_dim )" >
+</%def>
+
+
+<%def name="linreg(wieghted, input_dim, output_dim)" >
+// form X'X
+
+// take X*y 
+// solve X'X = X*y with cholskey decomposition
+// copy to result
+</%def>
 ##Spits out the body of a mean norm calculation, sans declaration or return statement.
-<%def name="mean_norm(iter_direct, input_dim, output_dim )">
-    <%
-        i = 'i' if iter_direct else 'indicies[i]'
-        access = 'data + %s*%s ' % (i, input_dim)
+<%def name="mean_norm(weighted, input_dim, output_dim )">
+   <%
+        access = 'data + i*%s ' % input_dim
+	cardinality = 'DATA_SIZE' if weighted else 'size'
    %>
    %if input_dim == 1:
       float mean = 0.0;
       for (unsigned int i=0; i<size; i++) {
-      	  %if access is UNDEFINED:
-	      print "access is undefined"
-	  %endif
-          mean += *(${access});
+           mean += *(${access});
       }
-      mean /= size;
-      result[0] = sqrt(mean * mean); //norm
+      mean /= ${cardinality};
+      result[0] = abs( mean ); //norm of scalar = absolute value
    %else:
-   %if input_dim is UNDEFINED:
-       print "input_dim is undefined"
-   %endif
-   float mean_vec[${input_dim}];
-    %if iter_direct:
-    float* initial=data;
+    float mean_vec[${input_dim}];
+    %if weighted:
+    vsp( data, weights[0], mean_vec, ${input_dim} );
     %else:
-    %if input_dim is UNDEFINED:
-    	print "input_dim is undefined"
+    vvc( data, mean_vec, ${input_dim} );
     %endif
-    float* initial= data+(indicies[0]*${input_dim});
-    %endif
-    %for k in xrange(input_dim):
-    mean_vec[${k}] = initial[${k}];
-    %endfor
-
     for (unsigned int i=1; i<size; i++) {
-         float* vec = ${access};
-         %for k in xrange(input_dim):
-             mean_vec[${k}] +=  vec[${k}];
-         %endfor
+        %if weighted:
+	vspa( ${access}, weights[i], ${input_dim}, mean_vec );
+	%else:
+	vva( ${access}, mean_vec, ${input_dim} );
+	%endif	
     }
-    %for j in xrange(input_dim):
-         mean_vec[${j}] /= size;
-    %endfor
+    vsid( mean_vec, ${cardinality}, ${input_dim} );
     //Take the norm of the mean vector
-    float norm = 0.0;
-    printf("Average vector is ");
-    %for j in xrange(input_dim):
-    	 printf("%f ", mean_vec[${j}]);
-    	 norm += mean_vec[${j}] * mean_vec[${j}];
-    %endfor
-    printf("\n");
-    if (norm < 0) {
-       printf("negative norm");
-    }
-    result[0] = sqrt(norm);
-    if (result[0] != result[0]) {
-       printf("nan detected");
-    }
+    *result =  norm( mean_vec, ${input_dim} );
+    
     %endif
 </%def>
 
 
 ##Spits out the body of a mean calculation, sans declaration or return statement.
-<%def name="mean(iter_direct, input_dim, output_dim )">
+<%def name="mean(weighted, input_dim, output_dim )">
     <%
-        i = 'i' if iter_direct else 'indicies[i]'
-	access = 'data + %s*%s ' % (i, input_dim)
-   %>
-   %if input_dim == 1:
-      float mean = 0.0;
-      for (unsigned int i=0; i<size; i++) {
-      	  mean += *(${access});
-      }
-      mean /= size;
-      result[0] = mean;
-   %else:
-    %if iter_direct:
-    float* initial=data;
-    %else:
-    float* initial= data+(indicies[0]*${input_dim});
-    %endif
-    %for k in xrange(input_dim):
-    result[${k}] = initial[${k}];
-    %endfor
-
-    for (unsigned int i=1; i<size; i++) {
-    	 %if access is UNDEFINED:
-	     print "access is undefined"
-	 %endif
-         float* vec = ${access};
-    	 %for k in xrange(input_dim):
-             result[${k}] +=  vec[${k}];
-	 %endfor
+	access = 'data + i*%s ' % input_dim
+	cardinality = 'DATA_SIZE' if weighted else 'size'
+    %>
+    %if input_dim == 1:
+    float mean = 0.0;
+    for (unsigned int i=0; i<size; i++) {
+        mean += *(${access});
     }
-    %for j in xrange(input_dim):
-    	 result[${j}] /= size;
-    //printf("Mean computed: %f\n", result[0]); 
-    %endfor
-  %endif
+    mean /= ${cardinality};
+    result[0] = mean;
+    %else:
+    	%if weighted:
+    vsp( data, weights[0], result, ${input_dim} );
+    	%else:
+    vvc( data, result, ${input_dim} );
+    	%endif
+    for (unsigned int i=1; i<size; i++) {
+        float* vec = ${access};
+    	%if weighted:
+	vspa( vec, weights[i], ${input_dim}, result );
+	%else:
+	vva( vec, result, ${input_dim} );
+	%endif
+    }
+    vsid( result, ${cardinality}, ${input_dim} );
+    %endif
 </%def>
 
 
 #define LINE_SIZE 64
 #define MIN(a,b) ((a>b)?(b):(a))
-#define DATA_SIZE ${n_data}
+#define DATA_SIZE ${n_vecs}
 #define SUBSAMPLE_SIZE ${sub_n}
 
-
-##Spits out the body of a mean calculation, sans declaration or return statement.
-<%def name="simple_mean()">
-    float mean = 0.0;
-    for( unsigned int i=0; i<size; i++ ){
-       mean += data[i];
-    }			 
-    mean /= size;
-</%def>
-
-<%def name="weighted_mean(input_dim, output_dim)" >
-      <%
-        i = 'i' if iter_direct else 'indicies[i]'
-        access = 'data + %s*%s ' % (i, input_dim)
-      %>
-
-    float* initial= data+(indicies[0]*${input_dim});
-    %for k in xrange(input_dim):
-    result[${k}] = weights[0]*initial[${k}];
-    %endfor
-    for (unsigned int i=1; i<size; i++) {
-         float* vec = ${access};
-         %for k in xrange(input_dim):
-             result[${k}] += weights[${k}] vec[${k}];
-         %endfor
+//vector print
+void vprint( float* const vec, const unsigned int dim ){
+   for( unsigned int i = 0; i<dim; i++ ){
+	printf("%f ", vec[i]);
+   } 
+}
+// vector-scalar product
+inline float* vsp( float* const vec, const int a, float* out, const unsigned int dim ){
+    for( unsigned int i = 0; i<dim; i++ ){
+        out[i] = vec[i]*a;
+    } 
+    return out;
+}
+// vector-vector copy
+inline float* vvc( float* const vec, float* out, const unsigned int dim ){
+   memcpy( out, vec, dim*sizeof(float));
+   return out;
+}
+// vector-scalar product & add
+inline float* vspa( float* vec, int a, unsigned int dim, float* out ){
+    for( unsigned i = 0; i<dim; i++ ){
+	out[i] += vec[i]*a;
     }
-    %for j in xrange(input_dim):
-         result[${j}] /= size;
-    %endfor
-
-</%def>
-
+    return out;
+}
+// vector-vector add
+inline float* vva( float* vec, float* out, unsigned int dim ){
+    for( unsigned int i = 0; i<dim; i++ ){
+	out[i] = out[i] + vec[i];
+    }
+    return out;
+}
+// vector-scalar in place divide
+inline float* vsid( float* vec, const int a, const unsigned int dim ){
+    for( unsigned int i = 0; i<dim; i++ ){
+	vec[i] /= a;
+    }
+    return vec;
+}
+// l-2 norm
+inline float norm( float* vec, unsigned int dim ){
+    float  norm = 0.0;
+    for( unsigned int i = 0; i<dim; i++ ){
+	norm += vec[i]*vec[i];
+    }
+    return sqrt( norm );	 
+}
+// weighted vector variance and add
+inline float* wvvara( float* vec, unsigned int a, float* mean, float* out, unsigned int dim ){
+	for( unsigned int i = 0; i<dim; i++ ){
+	    float residual = vec[i] - mean[i];
+	    out[i] += a*residual*residual;
+	}
+	return out;
+}
+// vector variance and add
+inline float* vvara( float* vec, float* mean, float* out, unsigned int dim ){
+	for(unsigned int i = 0; i<dim; i++ ){
+	    float residual = vec[i] - mean[i];
+	    out[i] += residual*residual;
+	}
+	return out;
+}
+// vector vector in place divide
+inline float* vvid( float* vec, float* quot, unsigned int dim ){
+	for( unsigned int i = 0; i<dim; i++){
+	    vec[i] /= quot[i];
+	}
+	return vec;
+}
+// vector sqrt in place
+inline float* vsqrti( float* vec, unsigned int dim ){
+	for( unsigned int i = 0; i<dim; i++ ){
+	    vec[i] = sqrt( vec[i] );
+	}
+	return vec;
+}
 inline float update_mean( const float mu1, const float mu2, const unsigned int n1, const unsigned int n2 ){
      float delta = mu2 - mu1;
      return mu1 + (n2*delta)/(n1 + n2);
 }
-
 inline float update_var( const float mu1, const float mu2, const float var1, const float var2, const unsigned int n1, const unsigned n2 ){
-    int size = n1 + n2;
+    int n = n1 + n2;
     float delta = mu2 - mu1;
-    return (n1*var1 + n2*var2 + (n1*delta*n2*delta)/size)/size;
+    return (n1*var1 + n2*var2 + ((n1*n2*delta*delta)/n) )/n;
 }
-
-<%def name="weighted_stdev(input_dim, output_dim)">
-    float mu_carry[input_dim]; //Mean of all the data elements seen before current cache block
-    float mu_curr[input_dim]; //Accumulator for current cache block
-    float var_carry[input_dim];
-    float var_curr[input_dim];
-    int k = 0;
+<%def name="stdev(weighted, input_dim, output_dim)">
+    <%
+	n = 'sum_weights' if weighted else 'LINE_SIZE'
+	n_left = 'sum_weights' if weighted else 'size - k'
+	n_cum = 'sum_weights_cum' if weighted else 'k'
+    %>
+    float mu_carry[${input_dim}]; //Mean of all the data elements seen before current cache block
+    float mu_curr[${input_dim}]; //Accumulator for current cache block
+    float var_carry[${input_dim}];
+    float var_curr[${input_dim}];
+    memset( mu_carry, 0, ${input_dim}*sizeof(float) );
+    memset( mu_curr, 0, ${input_dim}*sizeof(float) );
+    memset( var_carry, 0, ${input_dim}*sizeof(float) );
+    memset( var_curr, 0, ${input_dim}*sizeof(float) ); 
+    unsigned int k = 0;
+    %if weighted:
     unsigned int sum_weights = 0; //For current cache block
     unsigned int sum_weights_cum = 0;
-    for( int i= 0; i<size/LINE_SIZE; i++ ){
-	for( int j = k; j<k+LINE_SIZE; j++ ){
-	    for (int l=0; l<${input_dim}; l++) {
-	    	mu_curr[l] += data[(j*${input_dim}) + l]*weights[j];
-	    }
-	    sum_weights += weights[j];
-	}
-	for (int l=0; l<${input_dim}; l++) {
-	    mu_curr /= sum_weights;
-	}
-	for( int j= k; j<k+LINE_SIZE; j++ ){
-	    for (int l=0; l<${input_dim}; l++) {
-	    	float residual = data[(j*${input_dim}+l] - mu_curr[l];
-		var_curr[l] += weights[j] * residual * residual;
-	    }
-	}
-	for (int l=0; l<${input_dim}; l++) {
-	    var_curr[l] /= sum_weights;
-	    var_carry[l] = update_var( mu_carry[l], mu_curr[l], var_carry[l], var_curr[l], sum_weights_cum, sum_weights );
-	    mu_carry[l] = update_mean( mu_carry[l], mu_curr[l], sum_weights_cum, sum_weights );
-	}
-	sum_weights_cum += sum_weights;
-	for (int l=0; l<${input_dim}; l++) {
-	    mu_curr[l] =  var_curr[l] = 0.0;
-	}
-	sum_weights = 0;
-	k += LINE_SIZE;
-    }
-    // The leftovers
-    for( int j=k; j<size; j++ ){
-    	for (int l=0; l<${input_dim}; l++) {
-	    mu_curr[l] += weights[j]*data[(j*${input_dim})+l];
-	}
-	sum_weights += weights[j];
-    }
-    mu_curr /= sum_weights;
-    for( int j = k; j<size; j++ ){
-    	for (int l=0; l<${input_dim}; l++) {
-	    float residual = data[(j*${input_dim})+l] - mu_curr[l];
-	    var_curr[l] += weights[j]*residual*residual;
-	}
-    }
-    for (int l=0; l<${input_dim}; l++) {
-    	var_curr[l] /= sum_weights;
-    	var_carry[l] = update_var( mu_carry, mu_curr, var_carry, var_curr, sum_weights_cum, sum_weights);
-    float stdev = sqrt( var_carry );
-    }
-</%def>
-
-##Spits out the body of a standard deviation calculation, like unto mean defined above.
-<%def name="stdev(iter_direct, input_dim, output_dim )">
-      <%
-	access = 'data+i*%d' %input_dim if iter_direct else 'data + indicies[i]*%d ' %input_dim
-      %>
-      
-    float mean[${input_dim}];
-    %if iter_direct:
-    	float* initial=data;
-    %else:
-        float* initial=data+(indicies[0]*${input_dim});
     %endif
-    %for k in xrange(input_dim):
-    mean[${k}] = initial[${k}];
-    %endfor
-    for (unsigned int i=1; i<size; i++) {
-         float* vec = ${access};
-         %for k in xrange(input_dim):
-             mean[${k}] +=  vec[${k}];
-         %endfor
-    }
-    %for j in xrange(input_dim):
-         mean[${j}] /= size;
-    %endfor
-    
-    %for l in xrange(input_dim):
-    	 result[${l}] = 0.0;
-    %endfor
+    for( unsigned int i = 0; i<size/LINE_SIZE; i++ ){
+	for( unsigned int j = k; j<k+LINE_SIZE; j++ ){
+	    %if weighted:
+	    vspa( data+j*${input_dim}, weights[j], ${input_dim}, mu_curr );
+	    sum_weights += weights[j];
+	    %else:
+	    vva( data+j*${input_dim}, mu_curr, ${input_dim} );
+	    %endif
+	}
+	vsid( mu_curr, ${n}, ${input_dim} );
+	for( unsigned int j= k; j<k+LINE_SIZE; j++ ){
+	    %if weighted:
+	    wvvara( data+j*${input_dim}, weights[j], mu_curr, var_curr, ${input_dim} );
+	    %else:
+	    vvara( data+j*${input_dim}, mu_curr, var_curr, ${input_dim} );
+	    %endif
+	}
+	vsid( var_curr, ${n}, ${input_dim} );
 
-    for( unsigned int i=0; i<size; i++ ){
-	 float* vec = ${access};
-	 for (unsigned int j=0; j<${input_dim}; j++) {
-	     float x = vec[j] - mean[j];
-	     x *= x;
-	     if (x < 0) {
-	     	printf("x*=x makes x negative\n");
-	     }
-	     result[j] += x;
-	 }
-    }
-    for ( unsigned int j=0; j<${input_dim}; j++) {
-    	if (result[j] < 0) {
-	   printf("negative sum of square of deviations\n");
+	for ( unsigned int l=0; l<${input_dim}; l++) {
+	    var_carry[l] = update_var( mu_carry[l], mu_curr[l], var_carry[l], var_curr[l], ${n_cum}, ${n} );
+	    mu_carry[l] = update_mean( mu_carry[l], mu_curr[l], ${n_cum}, ${n} );
 	}
-	if (size <= 0) {
-	   printf("non positive size\n");
-	}
-    	result[j] /= size;
-	result[j] = sqrt(result[j]);
-    }
-</%def>
+	k += LINE_SIZE; 
+	memset( var_curr, 0, ${input_dim}*sizeof(float));
+	memset( mu_curr, 0, ${input_dim}*sizeof(float));
+	%if weighted:
+	sum_weights_cum += sum_weights;
+	sum_weights = 0;
+	%endif
 
-<%def name="simple_stdev()">
-    float mu_carry = 0.0;
-    float mu_curr = 0.0;
-    float var_carry = 0.0;
-    float var_curr = 0.0;
-    int k = 0;
-    for( int i = 0; i<size/LINE_SIZE; i++ ){
-	for( int j = k; j<k+LINE_SIZE; j++ ){
-	    mu_curr += data[j];
-	}
-	mu_curr /= LINE_SIZE;
-	for( int j= k; j<k+LINE_SIZE; j++ ){
-	    float residual = data[j] - mu_curr;
-	    var_curr += residual*residual;
-	}
-	var_carry = update_var( mu_carry, mu_curr, var_carry, var_curr, k, LINE_SIZE );
-	mu_carry = update_mean( mu_carry, mu_curr, k, LINE_SIZE );
-	mu_curr =  var_curr = 0.0;
-	k += LINE_SIZE;
     }
     // The leftovers
-    for( int j=k; j<size; j++ ){
-	mu_curr += ${datum};
+    for( unsigned int j=k; j<size; j++ ){
+	%if weighted:
+	vspa( data+j*${input_dim}, weights[j], ${input_dim}, mu_curr );
+	sum_weights += weights[j];
+	%else:
+	vva( data+j*${input_dim}, mu_curr, ${input_dim} );
+	%endif
     }
-    mu_curr /= size - k;
-    for( int j = k; j<size; j++ ){
-	float residual = ${datum};
-	var_curr += residual*residual;
+    vsid( mu_curr, ${n_left}, ${input_dim} );
+    for( unsigned int j = k; j<size; j++ ){
+	%if weighted:
+	wvvara( data+j*${input_dim}, weights[j], mu_curr, var_curr, ${input_dim} );
+	%else:
+	vvara( data+j*${input_dim}, mu_curr, var_curr, ${input_dim} );
+	%endif
     }
-    mu_curr /= size - k;
-    var_carry = update_var( mu_carry, mu_curr, var_carry, var_curr, k, size-k);
-    float stdev = sqrt( var_carry );
+    vsid( var_curr, ${n_left}, ${input_dim} );
+
+    for ( unsigned int l=0; l<${input_dim}; l++) {
+    	var_carry[l] = update_var( mu_carry[l], mu_curr[l], var_carry[l], var_curr[l], ${n_cum}, ${n_left});
+    }
+
+    memcpy( result, vsqrti( var_carry, ${input_dim} ), ${input_dim} * sizeof(float) );
 </%def>
+
 
 ##produce the classifier from the requested function
 <%def name="make_classifier(func_name, input_dim, output_dim)">
     <%
-        body = self.template.get_def(func_name).render(False, input_dim, output_dim)
+        body = self.template.get_def(func_name).render(True, input_dim, output_dim)
     %>
-void compute_estimate( float * const data, unsigned int * const indicies, unsigned int size, float* const result ){
+void compute_estimate( float * const data, unsigned int * const weights, unsigned int size, float* const result ){
       	 ${body}
 }
 </%def>
@@ -333,9 +288,9 @@ void compute_estimate( float * const data, unsigned int * const indicies, unsign
 ##produce the bootstrap reducer from the requested function
 <%def name="make_reduce_bootstraps( func_name, input_dim, output_dim )">
     <%
-        body = self.template.get_def(func_name).render(True, input_dim, output_dim)
+        body = self.template.get_def(func_name).render(False, input_dim, output_dim)
     %>
-void reduce_bootstraps( float * const data, unsigned int  size, float* const result ){
+void reduce_bootstraps( float * const data, unsigned int size, float* const result ){
      	 ${body}
 }
 </%def>
@@ -343,7 +298,7 @@ void reduce_bootstraps( float * const data, unsigned int  size, float* const res
 ##produce the subsample reducer from the requested function
 <%def name="make_average( func_name, input_dim, output_dim )">
     <%
-        body = self.template.get_def(func_name).render(True, input_dim, output_dim)
+        body = self.template.get_def(func_name).render(False, input_dim, output_dim)
     %>
 void average( float * const data, unsigned int size, float* const result ){
    	 ${ body }
