@@ -108,7 +108,7 @@ PyObject* compute_blb( PyObject* data ){
 %endif
   Py_DECREF( data );
   %if average_dim == 1:
-  return PyScalar_T_FromDouble( theta );
+  return PyFloat_FromDouble( theta );
   %else:
   npy_intp dim[1] = { ${average_dim} };
   return PyArray_SimpleNewFromData( 1, dim  , NPY_SCALAR, theta ); 
