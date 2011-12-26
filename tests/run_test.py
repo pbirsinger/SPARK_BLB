@@ -82,9 +82,8 @@ class MeanMean_BLB(BLB):
 
   def average(self, sample):
     sample = flatten(sample)
-    mean_vec = mean(sample, DIM, True)
+    mean_vec = mean(sample, DIM)
     x = norm( mean_vec )
-    print 'Python Mean of Mean: %f' % x
     return x
 
 class SDMean_BLB(BLB):
@@ -92,7 +91,6 @@ class SDMean_BLB(BLB):
     return mean(sample, DIM)
 
   def reduce_bootstraps(self, sample):
-    print stddev([ vec[0] for vec in sample ], 1)
     return stddev(flatten(sample), DIM)
 
   def average(self, sample):
@@ -126,32 +124,36 @@ class SDSD_BLB(BLB):
     return norm(mean_vec)
 
 class CMeanSD_BLB(BLB):
-    def __init__( self, **kargs ):
-        self.compute_estimate = 'stdev'
-        self.reduce_bootstraps = 'mean'
-        self.average = 'mean_norm'
-        BLB.__init__( self, **kargs )
+    def compute_estimate( self, sample ):
+	std()
+    def reduce_bootstraps( self, sample ):
+	mean()
+    def average( self, sample ):
+	mean_norm()
 
 class CMeanMean_BLB(BLB):
-  def __init__(self):
-    self.compute_estimate = 'mean'
-    self.reduce_bootstraps = 'mean'
-    self.average= 'mean_norm'
-    BLB.__init__( self )
+    def compute_estimate( self, sample ):
+	mean()
+    def reduce_bootstraps( self, sample ):
+	mean()
+    def average( self, sample ):
+	mean_norm()
 
 class CSDMean_BLB(BLB):
-  def __init__(self):
-    self.compute_estimate = 'mean'
-    self.reduce_bootstraps = 'stdev'
-    self.average = 'mean_norm'
-    BLB.__init__( self )
+    def compute_estimate( self, sample ):
+	mean()
+    def reduce_bootstraps( self, sample ):
+	std()
+    def average( self, sample ):
+	mean_norm()
 
 class CSDSD_BLB(BLB):
-  def __init__(self):
-    self.compute_estimate = 'stdev'
-    self.reduce_bootstraps = 'stdev'
-    self.average = 'mean_norm'
-    BLB.__init__( self )
+    def compute_estimate( self, sample ):
+	std()
+    def reduce_bootstraps( self, sample ):
+	std()
+    def average( self, sample ):
+	mean_norm()
 
 class MeanVariance_BLB(BLB):
   def compute_estimate(self, sample):
@@ -163,12 +165,14 @@ class MeanVariance_BLB(BLB):
   def average(self, sample):
     return mean(sample)
 
-class CMeanVariance_BLB(BLB):
-  def __init__(self):
-    self.compute_estimate = c_variance
-    self.reduce_bootstraps = 'mean'
-    self.average = 'mean_norm'
-    BLB.__init__( self )
+def PyMeanMean_BLB(dimension=1):
+    return MeanMean_BLB(pure_python=True, dimension=dimension)
+def PyMeanSD_BLB(dimension=1):
+    return MeanSD_BLB(pure_python=True, dimension=dimension)
+def PySDMean_BLB(dimension=1):
+    return SDMean_BLB(pure_python=True, dimension=dimension)
+def PySDSD_BLB(dimension=1):
+    return SDSD_BLB(pure_python=True, dimension=dimension)
 
 def percent_error( true, measured ):
   return abs( float( measured - true )/true )
@@ -198,62 +202,53 @@ class BLBTest(unittest.TestCase):
     Ensure that basic computations are accurate.
     """
     ## biased to prevent small-argument errors
-    #data = [ 100 + random.random() for i in xrange(10000) ]
 
     # mean of mean
-    py_blb = MeanMean_BLB()
-    c_blb = CMeanMean_BLB()
+    py_blb = PyMeanMean_BLB(dimension=8)
+    c_blb = CMeanMean_BLB(dimension=8)
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Mean of Mean', py_res, c_res, p) )
 
     # mean of stdev
-#    print "Computing MEAN of STDEV"
-    py_blb = MeanSD_BLB()
-    c_blb = CMeanSD_BLB()
+    py_blb = PyMeanSD_BLB(dimension=8)
+    c_blb = CMeanSD_BLB(dimension=8)
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-#    if (p<= self.threshold):
-#      print "Mean of SD passed"
     self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Mean of SD', py_res, c_res, p) )
 
     # stdev of mean
-#    print "Computing STDEV of MEAN"
-    py_blb = SDMean_BLB()
-    c_blb = CSDMean_BLB()
+    py_blb = PySDMean_BLB(dimension=8)
+    c_blb = CSDMean_BLB(dimension=8)
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-#    if (p <= self.threshold):
-#      print "SD of mean passed"
-    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of Mean', py_res, c_res, p) )
+#    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of Mean', py_res, c_res, p) )
 
     # stdev of stdev
 #    print "Computing STDEV of STDEV"
-    py_blb = SDSD_BLB()
-    c_blb = CSDSD_BLB()
+    py_blb = PySDSD_BLB(dimension=8)
+    c_blb = CSDSD_BLB(dimension=8)
     py_res = py_blb.run(data)
     c_res = c_blb.run(data)
     p = percent_error(py_res, c_res)
-#    if (p <= self.threshold):
-#      print "SD of SD passed"
-    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of SD', py_res, c_res, p) )
+#    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('SD of SD', py_res, c_res, p) )
 
 
-#  def test_numnpy(self):
-#    """
-#    Ensure the numpy c version works.
-#    """
-#    #data = [ random.random() for i in xrange(10000) ]
-#    print "Computing SD of MEAN"
-#    py_blb = SDMean_BLB()
-#    py_res = py_blb.run(data)
-#    c_blb = CSDMean_BLB()
-#    npy_data = numpy.array(data, dtype='float32')
-#    c_res = c_blb.run(npy_data)
-#    p = percent_error(py_res, c_res)
+  def test_numnpy(self):
+    """
+    Ensure the numpy c version works.
+    """
+    #data = [ random.random() for i in xrange(10000) ]
+    print "Computing SD of MEAN"
+    py_blb = PySDMean_BLB(dimension=8)
+    py_res = py_blb.run(data)
+    c_blb = CSDMean_BLB(dimension=8)
+    npy_data = numpy.array(data, dtype='float32')
+    c_res = c_blb.run(npy_data)
+    p = percent_error(py_res, c_res)
 #    self.assertTrue( p <= self.threshold, msg = BLB_FAIL_MSG % ('Numpy Test', py_res, c_res, p) )
 
 

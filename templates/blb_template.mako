@@ -10,6 +10,8 @@ USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
   subsmaple_threshold: the probability parameter for the subsample rng
   seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
+typedef ${scalar_type} scalar_t;
+#define NPY_SCALAR ${ 'NPY_FLOAT32' if scalar_type is 'float' else 'NPY_FLOAT64' }
 
 <%def name="bigrand( fname )">
 inline unsigned long ${fname}( unsigned int* seed ){
@@ -45,7 +47,7 @@ void bootstrap( unsigned int* out, gsl_rng* rng ){
 
 }
 
-void subsample_and_load( float* data, float* out, gsl_rng* rng ){
+void subsample_and_load( scalar_t* data, scalar_t* out, gsl_rng* rng ){
         for( int i = 0; i<${vec_n}; i++ ){
 	    unsigned int index = gsl_rng_get(rng) % ${n_vecs};
             vvc( data+(${dim}*index), out+(i*${dim}), ${dim} );
@@ -58,24 +60,24 @@ void subsample_and_load( float* data, float* out, gsl_rng* rng ){
 
 PyObject* compute_blb( PyObject*  data ){
     Py_INCREF(data);
-    PyObject * py_arr = PyArray_FROM_OTF( data, NPY_FLOAT32, NPY_IN_ARRAY );
+    PyObject * py_arr = PyArray_FROM_OTF( data, NPY_SCALAR, NPY_IN_ARRAY );
     Py_INCREF( py_arr );
-    float * c_arr = (float*) PyArray_DATA( py_arr );
+    scalar_t * c_arr = (scalar_t*) PyArray_DATA( py_arr );
 
 %elif seq_type == 'ndarray':
 
 PyObject* compute_blb( PyObject* data ){
     Py_INCREF( data );
-    float * c_arr = (float*) PyArray_DATA( data );
+    scalar_t * c_arr = (scalar_t*) PyArray_DATA( data );
 
 %endif
 
     //note that these are never cleared; We always fill them up
     //with the appropriate data before perform calculations on them.
-    float * subsample_estimates = (float*) calloc( ${n_subsamples*subsample_dim}, sizeof(float) );
-    float * subsample_values = (float*) calloc( ${vec_n*dim}, sizeof(float) );
+    scalar_t * subsample_estimates = (scalar_t*) calloc( ${n_subsamples*subsample_dim}, sizeof(scalar_t) );
+    scalar_t * subsample_values = (scalar_t*) calloc( ${vec_n*dim}, sizeof(scalar_t) );
     unsigned int * bootstrap_weights = (unsigned int*) calloc( ${vec_n}, sizeof(unsigned int) );
-    float * bootstrap_estimates = (float*) calloc( ${n_bootstraps*bootstrap_dim}, sizeof(float) );
+    scalar_t * bootstrap_estimates = (scalar_t*) calloc( ${n_bootstraps*bootstrap_dim}, sizeof(scalar_t) );
     gsl_rng* rng = gsl_rng_alloc(gsl_rng_taus);
     gsl_rng_set( rng, time(NULL) );
 
@@ -87,10 +89,15 @@ PyObject* compute_blb( PyObject* data ){
         }
     reduce_bootstraps( bootstrap_estimates, ${n_bootstraps}, subsample_estimates + i*${subsample_dim} );
     }
- 
-  float theta = 0;
+  
+  %if average_dim == 1:
+  scalar_t theta = 0.0;
   average( subsample_estimates, ${n_subsamples}, &theta );
- 
+  %else:
+  scalar_t* theta = (scalar_t*) calloc( ${average_dim}, sizeof(scalar_t) );
+  average( subsample_estimates, ${n_subsamples}, theta );
+  %endif
+
   gsl_rng_free(rng);
   free( subsample_estimates );
   free( bootstrap_weights );
@@ -100,7 +107,12 @@ PyObject* compute_blb( PyObject* data ){
   Py_DECREF( py_arr );
 %endif
   Py_DECREF( data );
-  return PyFloat_FromDouble(theta);
+  %if average_dim == 1:
+  return PyScalar_T_FromDouble( theta );
+  %else:
+  npy_intp dim[1] = { ${average_dim} };
+  return PyArray_SimpleNewFromData( 1, dim  , NPY_SCALAR, theta ); 
+  %endif
 }
 
 

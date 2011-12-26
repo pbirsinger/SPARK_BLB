@@ -20,25 +20,51 @@ Templating varriables in use
  
 Reducers defined by this file follow the interfaces
 
-void compute_estimate( float* data, unsigned int* indicies, unsigned int size, float* const result );
+void compute_estimate( scalar_t* data, unsigned int* indicies, unsigned int size, scalar_t* const result );
 
-float* reduce_bootstraps( float* data, unsigned int size );
+scalar_t* reduce_bootstraps( scalar_t* data, unsigned int size );
 
-float* average( float * data, unsigned int size );
+scalar_t* average( scalar_t * data, unsigned int size );
 
 </%doc>
 
+
+<%def name="linreg( weighted, input_dim, output_dim )" >
+// Form X'X in temporary memory
+double _XX[ ${(input_dim-1)*(input_dim-1)} ];
+memset( _XX, 0, ${(input_dim-1)*(input_dim-1)}*sizeof( double ) );
+_gsl_matrix_view XX = gsl_matrix_view_array( _XX, ${input_dim-1}, ${input_dim-1} );
+    for( unsigned int i = 0; i<size; i++ ){
+	double* vec = data+i*${input_dim};
+        _gsl_vector_const_view v = gsl_vector_const_view_array( vec+1, ${input_dim-1} );
+        %if weighted:
+        gsl_blas_dger( (double)weights[i]*weights[i], & v.vector, & v.vector, & XX.matrix );
+        %else:
+        gsl_blas_dsger( 1.0, & v.vector, & v.vector, & XX.matrix );
+        %endif
+    }
+// Form X'*y in temporary memory
+double _Xy[${input_dim-1}];
+memset( _Xy, 0, ${input_dim-1}*sizeof(double) );
+_gsl_vector_view Xy = gsl_vector_view_array( _Xy, ${input_dim-1} );
+    for( unsigned int i = 0; i<size; i++ ){
+	double* vec = data + i*${input_dim};
+        _gsl_vector_const_view v = gsl_vector_const_view_array( vec+1, ${input_dim-1} );
+        %if weighted:
+        gsl_blas_daxpy( weights[i]*vec[0], & v.vector, & Xy.vector );
+        %else:
+        gsl_blas_daxpy( vec[0], & v.vector, & Xy.vector );
+        %endif
+    }
+// Solve X'X*x = X'*y , store in result
+##gsl_blas_strsv( CblasUpper, CblasNoTrans, CblasNonUnit, & XX.matrix, & Xy.vector );
+gsl_linalg_HH_svx( & XX.matrix, & Xy.vector );
+memcpy( result, Xy.vector.data, ${input_dim-1}*sizeof(double) );
+
+</%def>
 <%def name="noop( weighted, input_dim, output_dim )" >
 </%def>
 
-
-<%def name="linreg(wieghted, input_dim, output_dim)" >
-// form X'X
-
-// take X*y 
-// solve X'X = X*y with cholskey decomposition
-// copy to result
-</%def>
 ##Spits out the body of a mean norm calculation, sans declaration or return statement.
 <%def name="mean_norm(weighted, input_dim, output_dim )">
    <%
@@ -46,14 +72,14 @@ float* average( float * data, unsigned int size );
 	cardinality = 'DATA_SIZE' if weighted else 'size'
    %>
    %if input_dim == 1:
-      float mean = 0.0;
+      double mean = 0.0;
       for (unsigned int i=0; i<size; i++) {
            mean += *(${access});
       }
       mean /= ${cardinality};
       result[0] = abs( mean ); //norm of scalar = absolute value
    %else:
-    float mean_vec[${input_dim}];
+    double mean_vec[${input_dim}];
     %if weighted:
     vsp( data, weights[0], mean_vec, ${input_dim} );
     %else:
@@ -81,7 +107,7 @@ float* average( float * data, unsigned int size );
 	cardinality = 'DATA_SIZE' if weighted else 'size'
     %>
     %if input_dim == 1:
-    float mean = 0.0;
+    double mean = 0.0;
     for (unsigned int i=0; i<size; i++) {
         mean += *(${access});
     }
@@ -94,7 +120,7 @@ float* average( float * data, unsigned int size );
     vvc( data, result, ${input_dim} );
     	%endif
     for (unsigned int i=1; i<size; i++) {
-        float* vec = ${access};
+        double* vec = ${access};
     	%if weighted:
 	vspa( vec, weights[i], ${input_dim}, result );
 	%else:
@@ -112,105 +138,105 @@ float* average( float * data, unsigned int size );
 #define SUBSAMPLE_SIZE ${sub_n}
 
 //vector print
-void vprint( float* const vec, const unsigned int dim ){
+void vprint( double* const vec, const unsigned int dim ){
    for( unsigned int i = 0; i<dim; i++ ){
 	printf("%f ", vec[i]);
    } 
 }
 // vector-scalar product
-inline float* vsp( float* const vec, const int a, float* out, const unsigned int dim ){
+inline double* vsp( double* const vec, const int a, double* out, const unsigned int dim ){
     for( unsigned int i = 0; i<dim; i++ ){
         out[i] = vec[i]*a;
     } 
     return out;
 }
 // vector-vector copy
-inline float* vvc( float* const vec, float* out, const unsigned int dim ){
-   memcpy( out, vec, dim*sizeof(float));
+inline double* vvc( double* const vec, double* out, const unsigned int dim ){
+   memcpy( out, vec, dim*sizeof(double));
    return out;
 }
 // vector-scalar product & add
-inline float* vspa( float* vec, int a, unsigned int dim, float* out ){
+inline double* vspa( double* vec, int a, unsigned int dim, double* out ){
     for( unsigned i = 0; i<dim; i++ ){
 	out[i] += vec[i]*a;
     }
     return out;
 }
 // vector-vector add
-inline float* vva( float* vec, float* out, unsigned int dim ){
+inline double* vva( double* vec, double* out, unsigned int dim ){
     for( unsigned int i = 0; i<dim; i++ ){
 	out[i] = out[i] + vec[i];
     }
     return out;
 }
 // vector-scalar in place divide
-inline float* vsid( float* vec, const int a, const unsigned int dim ){
+inline double* vsid( double* vec, const int a, const unsigned int dim ){
     for( unsigned int i = 0; i<dim; i++ ){
 	vec[i] /= a;
     }
     return vec;
 }
 // l-2 norm
-inline float norm( float* vec, unsigned int dim ){
-    float  norm = 0.0;
+inline double norm( double* vec, unsigned int dim ){
+    double  norm = 0.0;
     for( unsigned int i = 0; i<dim; i++ ){
 	norm += vec[i]*vec[i];
     }
     return sqrt( norm );	 
 }
 // weighted vector variance and add
-inline float* wvvara( float* vec, unsigned int a, float* mean, float* out, unsigned int dim ){
+inline double* wvvara( double* vec, unsigned int a, double* mean, double* out, unsigned int dim ){
 	for( unsigned int i = 0; i<dim; i++ ){
-	    float residual = vec[i] - mean[i];
+	    double residual = vec[i] - mean[i];
 	    out[i] += a*residual*residual;
 	}
 	return out;
 }
 // vector variance and add
-inline float* vvara( float* vec, float* mean, float* out, unsigned int dim ){
+inline double* vvara( double* vec, double* mean, double* out, unsigned int dim ){
 	for(unsigned int i = 0; i<dim; i++ ){
-	    float residual = vec[i] - mean[i];
+	    double residual = vec[i] - mean[i];
 	    out[i] += residual*residual;
 	}
 	return out;
 }
 // vector vector in place divide
-inline float* vvid( float* vec, float* quot, unsigned int dim ){
+inline double* vvid( double* vec, double* quot, unsigned int dim ){
 	for( unsigned int i = 0; i<dim; i++){
 	    vec[i] /= quot[i];
 	}
 	return vec;
 }
 // vector sqrt in place
-inline float* vsqrti( float* vec, unsigned int dim ){
+inline double* vsqrti( double* vec, unsigned int dim ){
 	for( unsigned int i = 0; i<dim; i++ ){
 	    vec[i] = sqrt( vec[i] );
 	}
 	return vec;
 }
-inline float update_mean( const float mu1, const float mu2, const unsigned int n1, const unsigned int n2 ){
-     float delta = mu2 - mu1;
+inline double update_mean( const double mu1, const double mu2, const unsigned int n1, const unsigned int n2 ){
+     double delta = mu2 - mu1;
      return mu1 + (n2*delta)/(n1 + n2);
 }
-inline float update_var( const float mu1, const float mu2, const float var1, const float var2, const unsigned int n1, const unsigned n2 ){
+inline double update_var( const double mu1, const double mu2, const double var1, const double var2, const unsigned int n1, const unsigned n2 ){
     int n = n1 + n2;
-    float delta = mu2 - mu1;
+    double delta = mu2 - mu1;
     return (n1*var1 + n2*var2 + ((n1*n2*delta*delta)/n) )/n;
 }
-<%def name="stdev(weighted, input_dim, output_dim)">
+<%def name="std(weighted, input_dim, output_dim)">
     <%
 	n = 'sum_weights' if weighted else 'LINE_SIZE'
 	n_left = 'sum_weights' if weighted else 'size - k'
 	n_cum = 'sum_weights_cum' if weighted else 'k'
     %>
-    float mu_carry[${input_dim}]; //Mean of all the data elements seen before current cache block
-    float mu_curr[${input_dim}]; //Accumulator for current cache block
-    float var_carry[${input_dim}];
-    float var_curr[${input_dim}];
-    memset( mu_carry, 0, ${input_dim}*sizeof(float) );
-    memset( mu_curr, 0, ${input_dim}*sizeof(float) );
-    memset( var_carry, 0, ${input_dim}*sizeof(float) );
-    memset( var_curr, 0, ${input_dim}*sizeof(float) ); 
+    double mu_carry[${input_dim}]; //Mean of all the data elements seen before current cache block
+    double mu_curr[${input_dim}]; //Accumulator for current cache block
+    double var_carry[${input_dim}];
+    double var_curr[${input_dim}];
+    memset( mu_carry, 0, ${input_dim}*sizeof(double) );
+    memset( mu_curr, 0, ${input_dim}*sizeof(double) );
+    memset( var_carry, 0, ${input_dim}*sizeof(double) );
+    memset( var_curr, 0, ${input_dim}*sizeof(double) ); 
     unsigned int k = 0;
     %if weighted:
     unsigned int sum_weights = 0; //For current cache block
@@ -240,8 +266,8 @@ inline float update_var( const float mu1, const float mu2, const float var1, con
 	    mu_carry[l] = update_mean( mu_carry[l], mu_curr[l], ${n_cum}, ${n} );
 	}
 	k += LINE_SIZE; 
-	memset( var_curr, 0, ${input_dim}*sizeof(float));
-	memset( mu_curr, 0, ${input_dim}*sizeof(float));
+	memset( var_curr, 0, ${input_dim}*sizeof(double));
+	memset( mu_curr, 0, ${input_dim}*sizeof(double));
 	%if weighted:
 	sum_weights_cum += sum_weights;
 	sum_weights = 0;
@@ -271,7 +297,7 @@ inline float update_var( const float mu1, const float mu2, const float var1, con
     	var_carry[l] = update_var( mu_carry[l], mu_curr[l], var_carry[l], var_curr[l], ${n_cum}, ${n_left});
     }
 
-    memcpy( result, vsqrti( var_carry, ${input_dim} ), ${input_dim} * sizeof(float) );
+    memcpy( result, vsqrti( var_carry, ${input_dim} ), ${input_dim} * sizeof(double) );
 </%def>
 
 
@@ -280,7 +306,7 @@ inline float update_var( const float mu1, const float mu2, const float var1, con
     <%
         body = self.template.get_def(func_name).render(True, input_dim, output_dim)
     %>
-void compute_estimate( float * const data, unsigned int * const weights, unsigned int size, float* const result ){
+void compute_estimate( double * const data, unsigned int * const weights, unsigned int size, double* const result ){
       	 ${body}
 }
 </%def>
@@ -290,7 +316,7 @@ void compute_estimate( float * const data, unsigned int * const weights, unsigne
     <%
         body = self.template.get_def(func_name).render(False, input_dim, output_dim)
     %>
-void reduce_bootstraps( float * const data, unsigned int size, float* const result ){
+void reduce_bootstraps( double * const data, unsigned int size, double* const result ){
      	 ${body}
 }
 </%def>
@@ -300,13 +326,19 @@ void reduce_bootstraps( float * const data, unsigned int size, float* const resu
     <%
         body = self.template.get_def(func_name).render(False, input_dim, output_dim)
     %>
-void average( float * const data, unsigned int size, float* const result ){
+void average( double * const data, unsigned int size, double* const result ){
    	 ${ body }
 }
 </%def>
 
+
+%for func_desc in desired_funcs:
+void ${func_desc[1]}( double* const data, ${ "unsigned int* const weights," if func_desc[2] else "" } const unsigned int size, double* result ){
+${self.template.get_def(func_desc[0]).render(func_desc[2], func_desc[3], func_desc[4])}
+}
+%endfor
 %if classifier is not UNDEFINED:
-void compute_estimate( float* data, unsigned int* indicies,  unsigned int size, float* const result ){
+void compute_estimate( double* data, unsigned int* weights,  unsigned int size, double* const result ){
     ${classifier}
 }
 %elif use_classifier is not UNDEFINED:
@@ -314,14 +346,15 @@ void compute_estimate( float* data, unsigned int* indicies,  unsigned int size, 
 %endif
 
 %if bootstrap_reducer is not UNDEFINED:
-float* reduce_bootstraps( float* data, unsigned int size ){
+void reduce_bootstraps( double* data, unsigned int size, double* result ){
     ${bootstrap_reducer}
+}
 %elif use_bootstrap_reducer is not UNDEFINED:
     ${make_reduce_bootstraps(use_bootstrap_reducer, bootstrap_dim, subsample_dim)}
 %endif
 
 %if subsample_reducer is not UNDEFINED:
-float average( float* data, unsigned int size ){
+void average( double* data, unsigned int size, double* result ){
     ${subsample_reducer}
 }
 %elif use_subsample_reducer is not UNDEFINED:
