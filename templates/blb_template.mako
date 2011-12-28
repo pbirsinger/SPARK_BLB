@@ -85,15 +85,12 @@ PyObject* compute_blb( PyObject* data ){
 //    	printf("Loading subsample number %d\n", i);
         subsample_and_load( c_arr, subsample_values, rng );
 	printf("Subsample values: ");
-	printArray(subsample_values, 0, ${vec_n * dim});
         for( int j=0; j<${n_bootstraps}; j++ ){
 //	   printf("Computing bootstrap number %d\n", j);
            bootstrap( bootstrap_weights, rng );
 	   //printf("bootstrap weights: ");
 	   //printArray(bootstrap_weights, 0, ${vec_n});
            compute_estimate( subsample_values, bootstrap_weights, ${vec_n}, bootstrap_estimates + j*${bootstrap_dim} );
-	   printf("Bootstrap estimate for bootstrap dim %d: ", ${bootstrap_dim});
-	   printArray(bootstrap_estimates, 0, ${n_bootstraps*bootstrap_dim});
         }
     reduce_bootstraps( bootstrap_estimates, ${n_bootstraps}, subsample_estimates + i*${subsample_dim} );
 //    printf("Subsample estimates: ");

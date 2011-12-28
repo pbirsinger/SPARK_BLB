@@ -8,7 +8,7 @@ import numpy
 import asp.config
 import inspect, ast
 from blb_convert import BLBConverter
-
+from blb_setup import gslroot, cache_dir
 
 	
 class BLB:
@@ -149,7 +149,7 @@ class BLB:
         rendered_impl = impl_template.render( **impl_args )
         
         import asp.jit.asp_module as asp_module
-        mod = asp_module.ASPModule(specializer='BLB', cache_dir='/home/vagrant/asp/cache')
+        mod = asp_module.ASPModule(specializer='BLB', cache_dir=cache_dir )
         mod.add_function('compute_estimate', rendered_impl)
         mod.add_function("compute_blb", rendered)
 
@@ -178,7 +178,6 @@ class BLB:
         return flat
         
     def set_includes(self, mod):
-	    gslroot = '/home/vagrant/gsl-1.15/'
 	    mod.add_header('stdlib.h')
             mod.add_header('math.h')
             mod.add_header('time.h')
@@ -186,13 +185,12 @@ class BLB:
 	    mod.add_header('gsl_rng.h')
 	    mod.add_header('gsl_randist.h')
 	    mod.add_library( 'blas', [], libraries=['blas'] )
-            mod.add_library( 'gsl', [gslroot, gslroot+'/randist', gslroot+'/rng'],
 	    mod.add_header('gsl_vector.h')
 	    mod.add_header('gsl_matrix.h')
 	    mod.add_header('gsl_blas.h')
 	    mod.add_header('gsl_linalg.h')
 	    mod.add_library( 'cblas', [], libraries=['cblas'] )
-            mod.add_library( 'gsl', [gslroot, gslroot+'/randist', gslroot+'/rng', gslroot+'matrix', gslroot+'vector', gslroot+'blas', gslroot+'linalg'],
+            mod.add_library( 'gsl', [gslroot, gslroot+'/randist', gslroot+'/rng', gslroot+'/matrix', gslroot+'/vector', gslroot+'/blas', gslroot+'/linalg'],
 				[gslroot+'/.libs'], ['gsl'] )
             if self.with_cilk:
                 mod.add_header('cilk/cilk.h')

@@ -14,13 +14,9 @@ def mean(sample, dim, verify=False ):
 	    print "Mean computed (python): " + str(avg) + " for dim " + str(dim) + " mean is " + str(avg / len(sample))
         return avg / len(sample)
     else:
-        print "Calculating mean of " + str(sample)
         avg = [0.0]*dim
-        print str(avg)
-        print "number of items is " + str(len(sample)) + " and dim is " + str(dim)
         for i in xrange(len(sample)):
             avg[i % dim] += sample[i]
-        print str(avg)
 	for j in xrange(dim):
 	    avg[j] /= (len(sample) / dim)
 	if verify:
@@ -144,11 +140,6 @@ class CMeanSD_BLB(BLB):
 	mean_norm()
 
 class CMeanMean_BLB(BLB):
-  def __init__(self):
-    self.compute_estimate = 'mean'
-    self.reduce_bootstraps = 'mean'
-    self.average= 'mean_norm'
-    BLB.__init__( self, dimension=DIM )
     def compute_estimate( self, sample ):
 	mean()
     def reduce_bootstraps( self, sample ):

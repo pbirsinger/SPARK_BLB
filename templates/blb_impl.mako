@@ -34,13 +34,6 @@ void printArray(unsigned int* arr, int start, int end);
 <%def name="noop( weighted, input_dim, output_dim )" >
 </%def>
 
-<%def name="linreg(wieghted, input_dim, output_dim)" >
-// form X'X
-
-// take X*y 
-// solve X'X = X*y with cholskey decomposition
-// copy to result
-
 <%def name="linreg( weighted, input_dim, output_dim )" >
 // Form X'X in temporary memory
 double _XX[ ${(input_dim-1)*(input_dim-1)} ];
@@ -96,12 +89,8 @@ memcpy( result, Xy.vector.data, ${input_dim-1}*sizeof(double) );
     double mean_vec[${input_dim}];
     %if weighted:
     vsp( data, weights[0], mean_vec, ${input_dim} );
-    printf("Mean vec is: ");
-    printArray(mean_vec, 0, ${input_dim});
     %else:
     vvc( data, mean_vec, ${input_dim} );
-    printf("Mean vec is: ");
-    printArray(mean_vec, 0, ${input_dim});
     %endif
     for (unsigned int i=1; i<size; i++) {
         %if weighted:
@@ -112,8 +101,6 @@ memcpy( result, Xy.vector.data, ${input_dim-1}*sizeof(double) );
     }
     vsid( mean_vec, ${cardinality}, ${input_dim} );
     //Take the norm of the mean vector
-    printf("Mean vector is: ");
-    printArray(mean_vec, 0, ${input_dim});
     *result =  norm( mean_vec, ${input_dim} );
     
     %endif
@@ -138,23 +125,15 @@ memcpy( result, Xy.vector.data, ${input_dim-1}*sizeof(double) );
     %else:
     	%if weighted:
     vsp( data, weights[0], result, ${input_dim} );
-    printf("result of vsp is: ");
-    printArray(result, 0, ${input_dim});
     	%else:
     vvc( data, result, ${input_dim} );
-    printf("result of vvc is: ");
-    printArray(result, 0, ${input_dim});
     	%endif
     for (unsigned int i=1; i<size; i++) {
         double* vec = ${access};
     	%if weighted:
 	vspa( vec, weights[i], ${input_dim}, result );
-	printf("Result of vspa is: ");
-	printArray(result, 0, ${input_dim});
 	%else:
 	vva( vec, result, ${input_dim} );
-	printf("result of vva is: ");
-	printArray(result, 0, ${input_dim});
 	%endif
     }
     vsid( result, ${cardinality}, ${input_dim} );
