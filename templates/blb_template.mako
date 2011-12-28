@@ -80,12 +80,22 @@ PyObject* compute_blb( PyObject* data ){
     gsl_rng_set( rng, time(NULL) );
 
     for( int i=0; i<${n_subsamples}; i++ ){
+//    	printf("Loading subsample number %d\n", i);
         subsample_and_load( c_arr, subsample_values, rng );
+	printf("Subsample values: ");
+	printArray(subsample_values, 0, ${vec_n * dim});
         for( int j=0; j<${n_bootstraps}; j++ ){
+//	   printf("Computing bootstrap number %d\n", j);
            bootstrap( bootstrap_weights, rng );
+	   //printf("bootstrap weights: ");
+	   //printArray(bootstrap_weights, 0, ${vec_n});
            compute_estimate( subsample_values, bootstrap_weights, ${vec_n}, bootstrap_estimates + j*${bootstrap_dim} );
+	   printf("Bootstrap estimate for bootstrap dim %d: ", ${bootstrap_dim});
+	   printArray(bootstrap_estimates, 0, ${n_bootstraps*bootstrap_dim});
         }
     reduce_bootstraps( bootstrap_estimates, ${n_bootstraps}, subsample_estimates + i*${subsample_dim} );
+//    printf("Subsample estimates: ");
+//    printArray(subsample_estimates + i*${subsample_dim}, 0, ${subsample_dim});
     }
  
   float theta = 0;
@@ -96,6 +106,7 @@ PyObject* compute_blb( PyObject* data ){
   free( bootstrap_weights );
   free( bootstrap_estimates );
   free( subsample_values );
+
 %if seq_type is UNDEFINED or seq_type == 'list':
   Py_DECREF( py_arr );
 %endif
@@ -103,6 +114,16 @@ PyObject* compute_blb( PyObject* data ){
   return PyFloat_FromDouble(theta);
 }
 
+void printArray(float* arr, int start, int end) {
+     for (int i=start; i<end; i++) {
+     	 printf("%f, ", arr[i]);
+     }
+     printf("\n");
+}
 
-
-
+void printArray(unsigned int* arr, int start, int end) {
+     for (int i=start; i<end; i++) {
+         printf("%d, ", arr[i]);
+     }
+     printf("\n");
+}

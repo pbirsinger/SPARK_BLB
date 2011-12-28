@@ -28,9 +28,11 @@ float* average( float * data, unsigned int size );
 
 </%doc>
 
+void printArray(float* arr, int start, int end);
+void printArray(unsigned int* arr, int start, int end);
+
 <%def name="noop( weighted, input_dim, output_dim )" >
 </%def>
-
 
 <%def name="linreg(wieghted, input_dim, output_dim)" >
 // form X'X
@@ -41,6 +43,7 @@ float* average( float * data, unsigned int size );
 </%def>
 ##Spits out the body of a mean norm calculation, sans declaration or return statement.
 <%def name="mean_norm(weighted, input_dim, output_dim )">
+   printf("Mean called with input_dim %d\n", ${input_dim});
    <%
         access = 'data + i*%s ' % input_dim
 	cardinality = 'DATA_SIZE' if weighted else 'size'
@@ -52,12 +55,18 @@ float* average( float * data, unsigned int size );
       }
       mean /= ${cardinality};
       result[0] = abs( mean ); //norm of scalar = absolute value
+      printf("Mean is: %f\n", result[0]);
    %else:
+    printf("mean with dimension %d\n", ${input_dim});
     float mean_vec[${input_dim}];
     %if weighted:
     vsp( data, weights[0], mean_vec, ${input_dim} );
+    printf("Mean vec is: ");
+    printArray(mean_vec, 0, ${input_dim});
     %else:
     vvc( data, mean_vec, ${input_dim} );
+    printf("Mean vec is: ");
+    printArray(mean_vec, 0, ${input_dim});
     %endif
     for (unsigned int i=1; i<size; i++) {
         %if weighted:
@@ -68,6 +77,8 @@ float* average( float * data, unsigned int size );
     }
     vsid( mean_vec, ${cardinality}, ${input_dim} );
     //Take the norm of the mean vector
+    printf("Mean vector is: ");
+    printArray(mean_vec, 0, ${input_dim});
     *result =  norm( mean_vec, ${input_dim} );
     
     %endif
@@ -76,6 +87,7 @@ float* average( float * data, unsigned int size );
 
 ##Spits out the body of a mean calculation, sans declaration or return statement.
 <%def name="mean(weighted, input_dim, output_dim )">
+    printf("Mean called with input_dim %d\n", ${input_dim});
     <%
 	access = 'data + i*%s ' % input_dim
 	cardinality = 'DATA_SIZE' if weighted else 'size'
@@ -83,6 +95,7 @@ float* average( float * data, unsigned int size );
     %if input_dim == 1:
     float mean = 0.0;
     for (unsigned int i=0; i<size; i++) {
+    	printf("%f ", ${access});
         mean += *(${access});
     }
     mean /= ${cardinality};
@@ -90,15 +103,23 @@ float* average( float * data, unsigned int size );
     %else:
     	%if weighted:
     vsp( data, weights[0], result, ${input_dim} );
+    printf("result of vsp is: ");
+    printArray(result, 0, ${input_dim});
     	%else:
     vvc( data, result, ${input_dim} );
+    printf("result of vvc is: ");
+    printArray(result, 0, ${input_dim});
     	%endif
     for (unsigned int i=1; i<size; i++) {
         float* vec = ${access};
     	%if weighted:
 	vspa( vec, weights[i], ${input_dim}, result );
+	printf("Result of vspa is: ");
+	printArray(result, 0, ${input_dim});
 	%else:
 	vva( vec, result, ${input_dim} );
+	printf("result of vva is: ");
+	printArray(result, 0, ${input_dim});
 	%endif
     }
     vsid( result, ${cardinality}, ${input_dim} );

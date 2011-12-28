@@ -9,7 +9,7 @@ import asp.config
 
 class BLB:
     known_reducers= ['mean', 'stdev', 'mean_norm', 'noop']
-    def __init__(self, num_subsamples=25, num_bootstraps=100, 
+    def __init__(self, num_subsamples=2, num_bootstraps=2, 
                  subsample_len_exp=0.5, with_cilk=False, with_openMP=False,
 	   	 dimension=1):
 
@@ -120,7 +120,7 @@ class BLB:
         rendered_impl = impl_template.render( **impl_args )
         
         import asp.jit.asp_module as asp_module
-        mod = asp_module.ASPModule(specializer='BLB', cache_dir='/home/eecs/howard/asp_cache')
+        mod = asp_module.ASPModule(specializer='BLB', cache_dir='/home/vagrant/asp/cache')
         mod.add_function('compute_estimate', rendered_impl)
         mod.add_function("compute_blb", rendered)
 
@@ -149,14 +149,14 @@ class BLB:
         return flat
         
     def set_includes(self, mod):
-	    gslroot = '/home/eecs/howard/gsl-1.15/'
+	    gslroot = '/home/vagrant/gsl-1.15/'
 	    mod.add_header('stdlib.h')
             mod.add_header('math.h')
             mod.add_header('time.h')
             mod.add_header('numpy/ndarrayobject.h')
 	    mod.add_header('gsl_rng.h')
 	    mod.add_header('gsl_randist.h')
-	    mod.add_library( 'cblas', [], libraries=['cblas'] )
+	    mod.add_library( 'blas', [], libraries=['blas'] )
             mod.add_library( 'gsl', [gslroot, gslroot+'/randist', gslroot+'/rng'],
 				[gslroot+'/.libs'], ['gsl'] )
             if self.with_cilk:
