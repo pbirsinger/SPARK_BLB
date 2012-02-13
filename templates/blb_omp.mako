@@ -30,6 +30,13 @@ void bootstrap( unsigned int* out, gsl_rng * rng ){
      sum_n += out[k];
     }
 }
+<%doc>
+determine header
+allocate temporaries
+effect computation
+free temporaries
+write to output
+</%doc>
 
 ## list is the default type.
 %if seq_type is UNDEFINED or seq_type == 'list':
@@ -63,15 +70,15 @@ PyObject* compute_blb( PyObject* data ){
     for (int i = 0; i < ${n_subsamples}; i++) {
         int tid = omp_get_thread_num();
         unsigned int* local_weights = bootstrap_weights+(${vec_n}*tid);
-        scalar_t* local_values = subsample_values+(${vec_n}*tid);
-        scalar_t* local_estimates = bootstrap_estimates+(${n_bootstraps}*tid);
+        scalar_t* local_values = subsample_values+(${vec_n*dim}*tid);
+        scalar_t* local_estimates = bootstrap_estimates+(${n_bootstraps*bootstrap_dim}*tid);
 	gsl_rng* rng = rngs[tid];
         subsample_and_load(c_arr, local_values, rng);
 	for (int j=0; j < ${n_bootstraps}; j++) {
             bootstrap(local_weights, rng );
-            compute_estimate(local_values, local_weights, ${vec_n}, local_estimates+j*${dim} );
+            compute_estimate(local_values, local_weights, ${vec_n}, local_estimates+j*${bootstrap_dim} );
         }
-        reduce_bootstraps(local_estimates, ${n_bootstraps}, subsample_estimates+(i*${bootstrap_dim}) );
+        reduce_bootstraps(local_estimates, ${n_bootstraps}, subsample_estimates+(i*${subsample_dim}) );
     }
     for( int i=0; i<${omp_n_threads};i++ ){
 	gsl_rng_free(rngs[i]);
@@ -105,58 +112,6 @@ PyObject* compute_blb( PyObject* data ){
 	subsample_estimates[i] = reduce_bootstraps( bootstrap_estimates, ${n_bootstraps} );
     }
     for( int i=0; i<${omp_n_threads};i++ ){
-	gsl_rng_free(rngs[i]);
-    }
-    free(rngs);
-%elif parallel_loop == 'teams':
-    scalar_t * subsample_estimates = (scalar_t*) calloc(${n_subsamples}, sizeof(scalar_t));
-    scalar_t * bootstrap_estimates = (scalar_t*) calloc(${n_bootstraps*omp_n_teams}, sizeof(scalar_t));
-    scalar_t * subsample_values = (scalar_t*) calloc(${sub_n*omp_n_teams}, sizeof(scalar_t));
-    unsigned int * bootstrap_weights = (unsigned int*) calloc(${sub_n*omp_n_teams*omp_team_size}, sizeof(unsigned int));
-    //We use static scheduling to avoid the overhead of synchronization and assigning tasks to threads dynamically
-    gsl_rng** rngs = (gsl_rng**) malloc( ${omp_n_teams*omp_team_size}*sizeof(gsl_rng*));
-
-    for(int i = 0; i<${omp_n_teams*omp_team_size}; i++){
-	rngs[i] = gsl_rng_alloc(gsl_rng_taus);
-	gsl_rng_set(rngs[i], rand());
-    }
-    #pragma omp parallel for schedule(static) num_threads(${omp_n_teams*omp_team_size})
-    for( int i = 0; i< ${omp_n_teams*omp_team_size}; i++ ){
-	unsigned int* local_weights = bootstrap_weights+(i*${sub_n});
-	loaded_bootstrap( local_weights, rngs[i] );
-    }
-    #pragma omp parallel for schedule(static) num_threads(${omp_n_teams})
-    for (int i = 0; i < ${n_subsamples}; i++) {
-        int tid = omp_get_thread_num();
-	if( !tid ) printf("Thread %d starting subsample %d, time ellapsed %d\n", tid, i, time(NULL) - start);
-        scalar_t* local_values = subsample_values+(${sub_n}*tid);
-        scalar_t* local_estimates = bootstrap_estimates+(${n_bootstraps}*tid);
-	gsl_rng* rng = rngs[tid];
-        subsample_and_load(c_arr, local_values, rng);
-	if( !tid ) printf("Thread %d preparation for subsample %d done, time ellapsed %d\n", tid, i, time(NULL) - start);
-	#pragma omp parallel for schedule(static) num_threads(${omp_team_size})
-        for (int j=0; j < ${n_bootstraps}; j++) {
-	    int stid = omp_get_thread_num();
-	    unsigned int seed = time(NULL)*stid;
-	    unsigned int * local_weights = bootstrap_weights+(${vec_n}*stid);
-	    permutation_bootstrap( local_weights, &seed  );
-	    local_estimates[j] = compute_estimate(local_values, local_weights, ${sub_n});
-        }
-	if( !tid ) printf("Thread %d bootstraps accomplished for subsample %d, time ellapsed %d\n", tid, i, time(NULL) - start);
-        subsample_estimates[i] = reduce_bootstraps(local_estimates, ${n_bootstraps});
-	if( !tid ) printf("Thread %d finished subsample %d, time ellapsed %d\n",tid, i, time(NULL) - start);
-    }
-    scalar_t theta = 0;
-    average(subsample_estimates, ${n_subsamples}, &theta);
-
-    printf("Freeing subsample_estimates \n");
-
-    printf("subsample_estimates: %x\n", (unsigned int) subsample_estimates);
-    printf("bootstrap_estimates: %x\n", (unsigned int) bootstrap_estimates);
-    printf("subsample_values: %x\n", (unsigned int) subsample_values);
-    printf("bootstrap_indicies: %x\n", (unsigned int) bootstrap_indicies);
-
-    for( int i=0; i<${omp_n_teams};i++ ){
 	gsl_rng_free(rngs[i]);
     }
     free(rngs);

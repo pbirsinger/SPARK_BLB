@@ -183,9 +183,7 @@ def PySDSD_BLB(dimension=1):
     return SDSD_BLB(pure_python=True, dimension=dimension)
 
 def percent_error( true, measured ):
-  if measured == true:
-      return 0
-  return abs( float( measured - true )/true )
+    return abs( ( measured - true )/true )
 
 def generate_data(dim):
   data = [0.0]*10000

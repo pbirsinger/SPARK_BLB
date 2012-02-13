@@ -28,14 +28,18 @@ scalar_t* average( scalar_t * data, unsigned int size );
 
 </%doc>
 
-void printArray(float* arr, int start, int end);
-void printArray(unsigned int* arr, int start, int end);
-
 <%def name="noop( weighted, input_dim, output_dim )" >
 </%def>
 
 <%def name="linreg( weighted, input_dim, output_dim )" >
 // Form X'X in temporary memory
+//printf("Checking data...\n");
+//for(int i = 0; i<size; i++ ){
+//printf("Checking vector %d\n", i );	
+// double * vec = data+i*${input_dim};
+// vprint( vec, ${input_dim} );
+// printf("\n");	
+//}
 double _XX[ ${(input_dim-1)*(input_dim-1)} ];
 memset( _XX, 0, ${(input_dim-1)*(input_dim-1)}*sizeof( double ) );
 _gsl_matrix_view XX = gsl_matrix_view_array( _XX, ${input_dim-1}, ${input_dim-1} );
@@ -45,34 +49,36 @@ _gsl_matrix_view XX = gsl_matrix_view_array( _XX, ${input_dim-1}, ${input_dim-1}
         %if weighted:
         gsl_blas_dger( (double)weights[i]*weights[i], & v.vector, & v.vector, & XX.matrix );
         %else:
-        gsl_blas_dsger( 1.0, & v.vector, & v.vector, & XX.matrix );
+        gsl_blas_dger( 1.0, & v.vector, & v.vector, & XX.matrix );
         %endif
     }
 // Form X'*y in temporary memory
+//printf("About to allocate vector\n");
 double _Xy[${input_dim-1}];
-memset( _Xy, 0, ${input_dim-1}*sizeof(double) );
+memset( _Xy, 0.0, ${input_dim-1}*sizeof(double) );
 _gsl_vector_view Xy = gsl_vector_view_array( _Xy, ${input_dim-1} );
+//printf("About to calculate vector\n");
     for( unsigned int i = 0; i<size; i++ ){
 	double* vec = data + i*${input_dim};
         _gsl_vector_const_view v = gsl_vector_const_view_array( vec+1, ${input_dim-1} );
         %if weighted:
-        gsl_blas_daxpy( weights[i]*vec[0], & v.vector, & Xy.vector );
+        gsl_blas_daxpy( weights[i]*weights[i]*vec[0], & v.vector, & Xy.vector );
         %else:
         gsl_blas_daxpy( vec[0], & v.vector, & Xy.vector );
         %endif
     }
 // Solve X'X*x = X'*y , store in result
-##gsl_blas_strsv( CblasUpper, CblasNoTrans, CblasNonUnit, & XX.matrix, & Xy.vector );
+//printf("About to calculate result \n");
 gsl_linalg_HH_svx( & XX.matrix, & Xy.vector );
-memcpy( result, Xy.vector.data, ${input_dim-1}*sizeof(double) );
-
+//printf("about to copy into result\n");
+memcpy( result , Xy.vector.data , ${input_dim-1}*sizeof(double) );
 </%def>
+
 <%def name="noop( weighted, input_dim, output_dim )" >
 </%def>
 
 ##Spits out the body of a mean norm calculation, sans declaration or return statement.
 <%def name="mean_norm(weighted, input_dim, output_dim )">
-   printf("Mean called with input_dim %d\n", ${input_dim});
    <%
         access = 'data + i*%s ' % input_dim
 	cardinality = 'DATA_SIZE' if weighted else 'size'
@@ -84,7 +90,6 @@ memcpy( result, Xy.vector.data, ${input_dim-1}*sizeof(double) );
       }
       mean /= ${cardinality};
       result[0] = abs( mean ); //norm of scalar = absolute value
-      printf("Mean is: %f\n", result[0]);
    %else:
     double mean_vec[${input_dim}];
     %if weighted:
@@ -109,7 +114,6 @@ memcpy( result, Xy.vector.data, ${input_dim-1}*sizeof(double) );
 
 ##Spits out the body of a mean calculation, sans declaration or return statement.
 <%def name="mean(weighted, input_dim, output_dim )">
-    printf("Mean called with input_dim %d\n", ${input_dim});
     <%
 	access = 'data + i*%s ' % input_dim
 	cardinality = 'DATA_SIZE' if weighted else 'size'

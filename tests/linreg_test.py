@@ -7,16 +7,19 @@ import numpy
 from run_test import percent_error
 
 def create_gaussian_data( num_observations, dimension, mapping=None, seed=None ):
-    results = numpy.zeros( num_observations*(dimension+1), dtype='float32' )
+    results = numpy.empty( num_observations*(dimension+1), dtype='float64' )
+    y_eps = 0.01
     if seed is not None:
 	numpy.random.seed( seed )
     if mapping is None:
 	mapping = numpy.random.randn( dimension )
+    offset = dimension + 1
     for i in xrange(num_observations):
-	x = numpy.random.randn( dimension )
-	y = reduce( float.__add__, map( float.__mul__, x, mapping ) )
-	numpy.put( results, i*dimension, y )
-	numpy.put( results, [ j+i*dimension  for j in xrange(1,dimension+1) ], x )
+	x = numpy.abs( numpy.random.randn( dimension ) )
+	#y = (numpy.random.rand() * y_eps) + reduce( float.__add__, map( float.__mul__, x, mapping ) )
+	y = reduce( float.__add__, x*mapping )
+	numpy.put( results, i*offset, y )
+	numpy.put( results, xrange( i*offset+1, (i+1)*offset) , x )
     return results, mapping
 
 class LinRegBLB( blb.BLB ):
@@ -32,7 +35,7 @@ class LinRegBLB( blb.BLB ):
 
 
 if __name__ == '__main__':
-    data, mapping = create_gaussian_data( 200, 50 )
+    data, mapping = create_gaussian_data( 3000, 50 )
     print 'mapping is, ', mapping
     cblb = LinRegBLB(dimension=51, num_subsamples=30)
     estimated_mapping = cblb.run( data )
@@ -42,4 +45,5 @@ if __name__ == '__main__':
 	p = percent_error( mapping[i], estimated_mapping[i] )
 	if p > 0.05:
 	    print 'Error: covariate %d is %f, estimated as %f, percent error %f' % (i, mapping[i], estimated_mapping[i], p )
+    print estimated_mapping
     print 'done'

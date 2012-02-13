@@ -11,7 +11,10 @@ USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
   seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
 typedef ${scalar_type} scalar_t;
+##define scalar_t ${scalar_type}
 #define NPY_SCALAR ${ 'NPY_FLOAT32' if scalar_type is 'float' else 'NPY_FLOAT64' }
+void printArray( scalar_t*, int, int );
+void printArray( unsigned int*, int, int );
 
 <%def name="bigrand( fname )">
 inline unsigned long ${fname}( unsigned int* seed ){
@@ -55,6 +58,7 @@ void subsample_and_load( scalar_t* data, scalar_t* out, gsl_rng* rng ){
 }
 
 
+
 ## list is the default type.
 %if seq_type == 'list':
 
@@ -71,7 +75,6 @@ PyObject* compute_blb( PyObject* data ){
     scalar_t * c_arr = (scalar_t*) PyArray_DATA( data );
 
 %endif
-
     //note that these are never cleared; We always fill them up
     //with the appropriate data before perform calculations on them.
     scalar_t * subsample_estimates = (scalar_t*) calloc( ${n_subsamples*subsample_dim}, sizeof(scalar_t) );
@@ -84,13 +87,14 @@ PyObject* compute_blb( PyObject* data ){
     for( int i=0; i<${n_subsamples}; i++ ){
 //    	printf("Loading subsample number %d\n", i);
         subsample_and_load( c_arr, subsample_values, rng );
-	printf("Subsample values: ");
         for( int j=0; j<${n_bootstraps}; j++ ){
-//	   printf("Computing bootstrap number %d\n", j);
-           bootstrap( bootstrap_weights, rng );
-	   //printf("bootstrap weights: ");
-	   //printArray(bootstrap_weights, 0, ${vec_n});
-           compute_estimate( subsample_values, bootstrap_weights, ${vec_n}, bootstrap_estimates + j*${bootstrap_dim} );
+//	    printf("Computing bootstrap number %d\n", j);
+            bootstrap( bootstrap_weights, rng );
+            compute_estimate( subsample_values, bootstrap_weights, ${vec_n}, bootstrap_estimates + j*${bootstrap_dim} );
+	    if( j == 0 ){
+//		printf("Bootstrap_estimate: ");
+//		printArray( bootstrap_estimates + j*${bootstrap_dim}, 0, ${bootstrap_dim} );
+	    }
         }
     reduce_bootstraps( bootstrap_estimates, ${n_bootstraps}, subsample_estimates + i*${subsample_dim} );
 //    printf("Subsample estimates: ");
@@ -123,9 +127,9 @@ PyObject* compute_blb( PyObject* data ){
   %endif
 }
 
-void printArray(float* arr, int start, int end) {
+void printArray(scalar_t* arr, int start, int end) {
      for (int i=start; i<end; i++) {
-     	 printf("%f, ", arr[i]);
+     	 printf("%.4f, ", arr[i]);
      }
      printf("\n");
 }

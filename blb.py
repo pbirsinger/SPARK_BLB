@@ -37,13 +37,13 @@ class BLB:
         self.cached_mods = {}
     
     def fingerprint(self, data):
-        """
+	"""
         Return a tuple of problem information sufficient to
         determine compilation-equivalence.
         """
-        return (len(data),type(data))
+        return tuple( [ (datum.shape,datum.dtype) for datum in data ] )
 
-    def run(self, data):
+    def run(self, *data):
         if self.pure_python:
             subsample_estimates = []
             for i in range(self.num_subsamples):
@@ -105,7 +105,7 @@ class BLB:
 	impl_funcs = []
 	impl_args['scalar_type'] = 'double'
 
-	estimate_converter = BLBConverter( self.dim, True )
+	estimate_converter = BLBConverter( key, input_size=vec_n, weighted=True )
 	estimate_cpp = estimate_converter.render( self.estimate_ast )
 	impl_args['classifier'] = estimate_cpp
 	impl_funcs.extend( estimate_converter.desired_funcs )
