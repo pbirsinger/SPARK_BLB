@@ -95,7 +95,6 @@ class BLBConverter( ast_tools.ConvertAST ):
 	annotations = dict()
 	for tup in defaults:
 	    annotations[tup[0].text] = tuple([elt.text for elt in tup])
-	print 'annotations', annotations
 	ret = []
 	if len( self._data_model ) != len( args ):
 	    raise TypeError( 'Expected %d arguments, received %d' % ( len( args ), len( self._data_model ) ) )
@@ -104,7 +103,6 @@ class BLBConverter( ast_tools.ConvertAST ):
 	    self.data_model[ arg.name ] = model
 	    model.name = arg.name
 	    ret.append(cpp_ast.Pointer(cpp_ast.Value(model.scalar_t.ctype(), arg.name)))
-	    print "Argument '%s': %s" % ( arg.name, repr( model ) )
 	    self.arg_model.append( model )
 	    model.should_subsample = not ( model.name in annotations and 'nosubsample' in annotations[model.name] )
 	if self.weighted:

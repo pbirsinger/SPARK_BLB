@@ -148,8 +148,215 @@ memcpy( result , Xy.vector.data , ${input_dim-1}*sizeof(double) );
 #define LINE_SIZE 64
 #define MIN(a,b) ((a>b)?(b):(a))
 #define DATA_SIZE ${n_vecs}
-#define SUBSAMPLE_SIZE ${sub_n}
 
+## UTILITY
+
+## HANDLERS
+
+<%def name="_blb_outer_product( args )" >
+void _blb_outer_product( double* const u, ${ 'const unsigned int a,' if args[1] else '' } double* const v, ${ 'const unsigned int b' if args[3] else '' }, double* X, unsigned int m, unsigned int n ){
+    _gsl_vector_const_view _u = gsl_vector_const_view_array( u, n );
+    _gsl_vector_const_view _v = gsl_vector_const_view_array( v, m );
+    _gsl_matrix_view _X = gsl_matrix_view_array( X, m, n );
+    %if args[1] and args[3]:
+    gsl_blas_dger( a*b, & _u.vector, & _v.vector, & _X.matrix );
+    %elif args[1]:
+    gsl_blas_dger( a, & _u.vector, & _v.vector, & _X.matrix );
+    %elif args[3]:
+    gsl_blas_dger( b, & _u.vector, & _v.vector, & _X.matrix );
+    %else:
+    gsl_blas_dger( 1.0, & _u.vector, & _v.vector, & _X.matrix );
+    %endif
+}
+</%def>
+
+<%def name="_blb_PLUS_MACRO( args )" >
+#define _blb_PLUS_MACRO( right, left, a, res ) res = (${args[0]})(left + a*right)
+</%def>
+
+<%def name="_blb_MINUS_MACRO( args )" >
+#define _blb_MINUS_MACRO( right, left, a, res ) res = (${args[0]})(left - a*right)
+</%def>
+
+<%def name="_blb_MULT_MACRO( args )" >
+#define _blb_MULT_MACRO( right, left, a, res ) res = (${args[0]})a*left*right
+</%def>
+
+<%def name="_blb_DIV_MACRO( args )" >
+#define _blb_DIV_MACRO( right, left, a, res ) res = (${args[0]})(left/(a*right))
+</%def>
+
+<%def name="_blb_dot( args )">
+void _blb_dot( ${args[0]}* v, ${args[1]}* u, ${args[2]}* out, unsigned int n ){
+    ${args[2]} x = 0;
+    for( unsigned int i; i<n; i++ ){
+	x += v[i]*u[i];
+    }
+    *out = x;
+}
+</%def>
+
+<%def name="_blb_dota( args )" >
+%if args[3]:
+void _blb_dota( ${args[0]}* v, ${args[1]}* u, ${args[2]}* out, int a, unsigned int n ){
+    ${args[2]} x = 0;
+    for( unsigned int i=0; i<n; i++ ){
+	x += v[i]*u[i];
+    }
+    *out += a*x;
+}
+%else:
+voiid _blb_dota( ${args[0]}* v, ${args[1]}* u, ${args[2]}* out, unsigned int n ){
+    ${args[2]} x = 0;
+    for( unsigned int i=0; i<n; i++ ){
+	x += v[i]*u[i];
+    }
+    *out += x;
+}
+%endif
+</%def>
+
+<%def name="_blb_vaxbyo( args )" >
+%if args[3]:
+void _blb_vaxbyo( ${args[0]}* x, ${args[1]}* y, ${args[2]}* out, int a, unsigned int n ){
+    for( unsigned int i = 0; i< n; i++ ){
+	out[i] = (x[i] + a*y[i]);
+    }
+}
+%else:
+void _blb_vaxbyo( ${args[0]}* x, ${args[1]}* y, ${args[2]}* out, unsigned int n ){
+    for( unsigned int i = 0; i< n; i++ ){
+	out[i] = x[i] + y[i];
+    }
+}
+%endif
+</%def>
+
+<%def name="_blb_vaxmyo( args )" >
+%if args[3]:
+void _blb_vaxmyo( ${args[0]}* x, ${args[1]}* y, ${args[2]}* out, int a, unsigned int n ){
+    for( unsigned int i = 0; i<n; i++ ){
+	out[i] = (x[i] - a*y[i]);
+    }
+}
+%else:
+void _blb_vaxmyo( ${args[0]}* x, ${args[1]}* y, ${args[2]}* out, unsigned int n ){
+    for( unsigned int i = 0; i<n; i++ ){
+	out[i] = x[i] - y[i];
+    }
+}
+%endif
+</%def>
+  
+<%doc>
+<%def name="_blb_vaxby( args )" >
+void _blb_vaxby( ${args[0] }* const x, double a, ${args[1]}* const y, double b, unsigned int n ){
+    for( unsigned int i=0; i< n; i++ ){
+	y[i] = b*y[i] + a*x[i];
+    }
+}
+</%def>
+</%doc>
+
+<%def name="_blb_vscaleo( args )" >
+void _blb_vscaleo( ${args[0]}* vec, double a, ${args[2]}* out, unsigned int n ){
+    for( unsigned int i = 0; i<n; i++ ){
+	out[i] = vec[i] * a;
+    }
+}	
+</%def>
+
+<%def name="_blb_vmulte( args )" >
+%if args[3]:
+void _blb_vmulte( ${args[0]}* x, ${args[1]}* y, ${args[2]}* out, int a, unsigned int n ){
+    for( unsigned int i=0; i<n; i++ ){
+	out[i] = x[i]* a * y[i];
+    }
+}
+%else:
+void _blb_vmulte( $args[0]}* x, ${args[1]}* y, ${args[2]}* out, unsigned int n ){
+    for( unsigned int i=0; i<n; i++ ){
+	out[i] = y[i]*x[i];
+    }
+}
+%endif
+</%def>
+
+<%def name="_blb_vdive( args )" >
+%if args[3]:
+void _blb_vdive ( ${args[0]}* x, ${args[1]}* y, ${args[2]}* out, int a, unsigned int n ){
+    for( unsigned int i = 0; i<n; i++ ){
+	out[i] = (x[i] / (a*y[i]));
+    }
+}
+%else:
+void _blb_vdive ( $args[0]}* x, ${args[1]}* y, ${args[2]}* out, unsigned int n ){
+    for( unsigned int i=0; i<n;i++){
+	out[i] = x[i]/y[i];
+    }
+}
+%endif
+</%def>
+
+<%def name="_blb_vexpa( args )" >
+%if args[3]:
+void _blb_vexpa( ${args[0]}* base, ${args[1]} exponent, ${args[2]}* out, int a, unsigned int n ){
+    for( unsigned int i=0; i<n; i++ ){
+	out[i] = pow( base[i], exponent );
+    }
+}
+%else:
+void _blb_vexpa( ${args[0]}* base, ${args[1]} exponent, ${args[2]}* out, unsigned int n ){
+    for( unsigned int i=0; i<n; i++ ){
+	out[i] = pow( base[i], exponent );
+    }
+}
+%endif
+</%def >
+
+<%def name="_blb_vexpe( args )" >
+%if args[3]:
+void _blb_vexpe( ${args[0]}* base, ${args[1]}* exponents, ${args[2]}* out, int a, unsigned int n ){
+    for( unsigned int i=0; i<n; i++ ){
+	out[i] = pow( base[i], exponents[i]);
+    }
+}
+%else:
+void _blb_vexpe( ${args[0]}* base, ${args[1]}* exponents, ${args[2]}* out, unsigned int n ){
+    for( unsigned int i=0; i<n; i++ ){
+	out[i] = pow( base[i], exponents[i] );
+    }
+}
+%endif
+</%def>
+
+<%def name="_blb_sqrt( args )" >
+void _blb_sqrt( ${args[0]} x, double* out ){
+	*out = sqrt( x );
+}
+</%def>
+
+<%def name="_blb_vsqrte( args )" >
+void _blb_vsqrte( ${args[0]}* x, ${args[1]}* out, unsigned int n ){
+    for( unsigned int i = 0; i<n; i++ ){
+	out[i] = sqrt( x[i] );
+    }
+}
+</%def>
+
+<%def name="_blb_mvsolve( args )" >
+void _blb_mvsolve( double* A, double* b, ${ "double* res," if not args[0] else "" } unsigned int m, unsigned int n ){
+    _gsl_matrix_view _A = gsl_matrix_view_array( A, m, n );
+    _gsl_vector_view _b = gsl_vector_view_array( b, m );
+%if not args[0]:
+    _gsl_vector_view _x = gsl_vector_view_array( res, n );
+    gsl_linalg_HH_solve( & _A.matrix, & _b.vector, & _x.vector );
+%else:
+    gsl_linalg_HH_svx( & _A.matrix, & _b.vector );
+%endif
+}
+</%def>
+<%doc>
 //vector print
 void vprint( double* const vec, const unsigned int dim ){
    for( unsigned int i = 0; i<dim; i++ ){
@@ -236,84 +443,38 @@ inline double update_var( const double mu1, const double mu2, const double var1,
     double delta = mu2 - mu1;
     return (n1*var1 + n2*var2 + ((n1*n2*delta*delta)/n) )/n;
 }
+</%doc>
 <%def name="std(weighted, input_dim, output_dim)">
     <%
 	n = 'sum_weights' if weighted else 'LINE_SIZE'
 	n_left = 'sum_weights' if weighted else 'size - k'
 	n_cum = 'sum_weights_cum' if weighted else 'k'
     %>
-    double mu_carry[${input_dim}]; //Mean of all the data elements seen before current cache block
-    double mu_curr[${input_dim}]; //Accumulator for current cache block
-    double var_carry[${input_dim}];
-    double var_curr[${input_dim}];
-    memset( mu_carry, 0, ${input_dim}*sizeof(double) );
-    memset( mu_curr, 0, ${input_dim}*sizeof(double) );
-    memset( var_carry, 0, ${input_dim}*sizeof(double) );
-    memset( var_curr, 0, ${input_dim}*sizeof(double) ); 
-    unsigned int k = 0;
+    double square_sum [ ${input_dim} ];
+    double hold [ ${input_dim} ];
+    memset( square_sum, 0, ${input_dim}*sizeof(double) );
+    memset( hold, 0, ${input_dim}*sizeof(double) );
     %if weighted:
     unsigned int sum_weights = 0; //For current cache block
     unsigned int sum_weights_cum = 0;
     %endif
-    for( unsigned int i = 0; i<size/LINE_SIZE; i++ ){
-	for( unsigned int j = k; j<k+LINE_SIZE; j++ ){
-	    %if weighted:
-	    vspa( data+j*${input_dim}, weights[j], ${input_dim}, mu_curr );
-	    sum_weights += weights[j];
-	    %else:
-	    vva( data+j*${input_dim}, mu_curr, ${input_dim} );
-	    %endif
-	}
-	vsid( mu_curr, ${n}, ${input_dim} );
-	for( unsigned int j= k; j<k+LINE_SIZE; j++ ){
-	    %if weighted:
-	    wvvara( data+j*${input_dim}, weights[j], mu_curr, var_curr, ${input_dim} );
-	    %else:
-	    vvara( data+j*${input_dim}, mu_curr, var_curr, ${input_dim} );
-	    %endif
-	}
-	vsid( var_curr, ${n}, ${input_dim} );
-
-	for ( unsigned int l=0; l<${input_dim}; l++) {
-	    var_carry[l] = update_var( mu_carry[l], mu_curr[l], var_carry[l], var_curr[l], ${n_cum}, ${n} );
-	    mu_carry[l] = update_mean( mu_carry[l], mu_curr[l], ${n_cum}, ${n} );
-	}
-	k += LINE_SIZE; 
-	memset( var_curr, 0, ${input_dim}*sizeof(double));
-	memset( mu_curr, 0, ${input_dim}*sizeof(double));
-	%if weighted:
-	sum_weights_cum += sum_weights;
-	sum_weights = 0;
-	%endif
-
+    for( int i = 0; i< size; i++ ){
+    %if weighted:
+	vaxbyo( data+i*${input_dim}, weights[i], result, 1.0, result, ${input_dim} );
+	vmulte( data+i*${input_dim}, weights[i], data+i*${input_dim}, weights[i], hold, ${input_dim} );
+	vaxbyo( hold, 1.0, square_sum, 1.0, square_sum, ${input_dim} );
+    %else:
+	vaxbyo( data+i*${input_dim}, 1.0, result, 1.0, result, ${input_dim} );
+	vmulte( data+i*${input_dim}, 1.0, data+i*${input_dim}, 1.0, hold, ${input_dim} );
+	vaxbyo( hold, 1.0, square_sum, 1.0, square_sum, ${input_dim} );
+    %endif
     }
-    // The leftovers
-    for( unsigned int j=k; j<size; j++ ){
-	%if weighted:
-	vspa( data+j*${input_dim}, weights[j], ${input_dim}, mu_curr );
-	sum_weights += weights[j];
-	%else:
-	vva( data+j*${input_dim}, mu_curr, ${input_dim} );
-	%endif
-    }
-    vsid( mu_curr, ${n_left}, ${input_dim} );
-    for( unsigned int j = k; j<size; j++ ){
-	%if weighted:
-	wvvara( data+j*${input_dim}, weights[j], mu_curr, var_curr, ${input_dim} );
-	%else:
-	vvara( data+j*${input_dim}, mu_curr, var_curr, ${input_dim} );
-	%endif
-    }
-    vsid( var_curr, ${n_left}, ${input_dim} );
-
-    for ( unsigned int l=0; l<${input_dim}; l++) {
-    	var_carry[l] = update_var( mu_carry[l], mu_curr[l], var_carry[l], var_curr[l], ${n_cum}, ${n_left});
-    }
-
-    memcpy( result, vsqrti( var_carry, ${input_dim} ), ${input_dim} * sizeof(double) );
+    vscaleo( result, 1.0/DATA_SIZE, result, ${input_dim} );
+    vscaleo( square_sum, 1.0/DATA_ZISE, square_sum, ${input_dim} );
+    vmulte( result, 1.0, result, 1.0, hold, ${input_dim} );
+    vaxbyo( square_sum, 1.0, hold, -1.0, result, ${input_dim}  
+    vsqrt( result, result, ${input_dim} ); 
 </%def>
-
-
 ##produce the classifier from the requested function
 <%def name="make_classifier(func_name, input_dim, output_dim)">
     <%
@@ -323,7 +484,6 @@ void compute_estimate( double * const data, unsigned int * const weights, unsign
       	 ${body}
 }
 </%def>
-
 ##produce the bootstrap reducer from the requested function
 <%def name="make_reduce_bootstraps( func_name, input_dim, output_dim )">
     <%
@@ -346,30 +506,23 @@ void average( double * const data, unsigned int size, double* const result ){
 
 
 %for func_desc in desired_funcs:
-void ${func_desc[1]}( double* const data, ${ "unsigned int* const weights," if func_desc[2] else "" } const unsigned int size, double* result ){
-${self.template.get_def(func_desc[0]).render(func_desc[2], func_desc[3], func_desc[4])}
-}
+${self.template.get_def(func_desc[0]).render( func_desc[1])}
 %endfor
+
 %if classifier is not UNDEFINED:
-void compute_estimate( double* data, unsigned int* weights,  unsigned int size, double* const result ){
     ${classifier}
-}
 %elif use_classifier is not UNDEFINED:
     ${make_classifier(use_classifier, dim, bootstrap_dim )}
 %endif
 
 %if bootstrap_reducer is not UNDEFINED:
-void reduce_bootstraps( double* data, unsigned int size, double* result ){
     ${bootstrap_reducer}
-}
 %elif use_bootstrap_reducer is not UNDEFINED:
     ${make_reduce_bootstraps(use_bootstrap_reducer, bootstrap_dim, subsample_dim)}
 %endif
 
 %if subsample_reducer is not UNDEFINED:
-void average( double* data, unsigned int size, double* result ){
     ${subsample_reducer}
-}
 %elif use_subsample_reducer is not UNDEFINED:
     ${make_average(use_subsample_reducer, subsample_dim, average_dim)}
 %endif

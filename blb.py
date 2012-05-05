@@ -7,7 +7,7 @@ import random
 import numpy
 import asp.config
 import inspect, ast
-from blb_convert import BLBConverter
+from convert.blb_convert import BLBConverter, create_data_model
 from blb_setup import gslroot, cache_dir
 
 	
@@ -66,17 +66,16 @@ class BLB:
             else:
                 mod = self.build_mod(f)
                 self.cached_mods[f] = mod
-            return mod.compute_blb(data)
+            return mod.compute_blb(*data)
 
-    def compile_for( self, data, key=None ):
-        f = key if key else self.fingerprint(data)
+    def compile_for( self, key  ):
 	mod = None
-	if f in self.cached_mods:
-	    mod = self.cached_mods[f]
+	if key in self.cached_mods:
+	    mod = self.cached_mods[key]
 	else:
-	    mod = self.build_mod(f)
+	    mod = self.build_mod(key)
 	    mod.backends["c++"].compile()
-	    self.cached_mods[f] = mod
+	    self.cached_mods[key] = mod
 
     def build_mod(self, key):
         template_name = ''
@@ -92,36 +91,47 @@ class BLB:
         blb_template = template.Template(filename="templates/%s" % template_name, disable_unicode=True)
         impl_template = template.Template(filename="templates/blb_impl.mako", disable_unicode=True)
 
-        
-	if key[0] % self.dim != 0:
-	    raise ValueError( 'Data must be of dimension %d' % self.dim )
-	n_vecs = key[0] / self.dim
+        #leading dimension of first data object tuple 
+	n_vecs = key[0][0][0]
+
 	vec_n = int( pow( n_vecs, self.subsample_len_exp ) )
-        impl_args = {'dim': self.dim}
-        impl_args['n_data'] = key[0]
-        impl_args['sub_n'] = int( pow( key[0], self.subsample_len_exp ) )
+	impl_args = {}
+        #impl_args = {'dim': self.dim}
+        #impl_args['n_data'] = key[0]
+        #impl_args['sub_n'] = int( pow( key[0], self.subsample_len_exp ) )
         impl_args['vec_n'] = vec_n
 	impl_args['n_vecs'] = n_vecs 
 	impl_funcs = []
 	impl_args['scalar_type'] = 'double'
 
-	estimate_converter = BLBConverter( key, input_size=vec_n, weighted=True )
+
+	estimate_converter = BLBConverter( create_data_model(key, vec_n), input_size=vec_n, weighted=True )
 	estimate_cpp = estimate_converter.render( self.estimate_ast )
 	impl_args['classifier'] = estimate_cpp
 	impl_funcs.extend( estimate_converter.desired_funcs )
- 	impl_args['bootstrap_dim'] = estimate_converter.output_dim()
+ 	impl_args['bootstrap_model'] = estimate_converter.get_ret_model()
+	arg_model = [ model.clone() for model in estimate_converter.arg_model ]
+	for i in range(len(arg_model)):
+	    arg_model[i].dimensions = key[i][0]
+	impl_args['arg_model'] = arg_model
 
-	reduce_converter = BLBConverter( impl_args['bootstrap_dim'], False )
+	reduce_input = estimate_converter.get_ret_model().clone()
+	reduce_input.dimensions.insert( 0, self.num_bootstraps )
+	reduce_input.set_len( self.num_bootstraps )
+	reduce_converter = BLBConverter( [reduce_input], input_size=self.num_bootstraps )
 	reduce_cpp = reduce_converter.render( self.reduce_ast )
 	impl_args['bootstrap_reducer'] = reduce_cpp
 	impl_funcs.extend( reduce_converter.desired_funcs )
-	impl_args['subsample_dim'] = reduce_converter.output_dim()
+	impl_args['subsample_model'] = reduce_converter.get_ret_model()
 
-	average_converter = BLBConverter( impl_args['subsample_dim'], False )
+	average_input = reduce_converter.get_ret_model().clone()
+	average_input.dimensions.insert( 0, self.num_subsamples )
+	average_input.set_len( self.num_subsamples )
+	average_converter = BLBConverter( [average_input], input_size=self.num_subsamples )
 	average_cpp = average_converter.render( self.average_ast )
 	impl_args['subsample_reducer'] = average_cpp
 	impl_funcs.extend( average_converter.desired_funcs )
-	impl_args['average_dim'] = average_converter.output_dim()
+	impl_args['average_model'] = average_converter.get_ret_model()
 
 	impl_args['desired_funcs'] = set(impl_funcs)
 	fwk_args = self.set_framework_args(key, impl_args.copy())
@@ -189,7 +199,7 @@ class BLB:
 	    mod.add_header('gsl_matrix.h')
 	    mod.add_header('gsl_blas.h')
 	    mod.add_header('gsl_linalg.h')
-	    mod.add_library( 'cblas', [], libraries=['cblas'] )
+#	    mod.add_library( 'cblas', [], libraries=['cblas'] )
             mod.add_library( 'gsl', [gslroot, gslroot+'/randist', gslroot+'/rng', gslroot+'/matrix', gslroot+'/vector', gslroot+'/blas', gslroot+'/linalg'],
 				[gslroot+'/.libs'], ['gsl'] )
             if self.with_cilk:
@@ -229,13 +239,10 @@ class BLB:
 
 	the key argument is a fingerprint key for this specialiser
         '''
-	platform = asp.config.PlatformDetector()
-        # estimate cache line size
-        if key[1] is list:
-            vars['seq_type'] = 'list'
-        elif key[1] is numpy.ndarray:
-            vars['seq_type'] = 'ndarray'
-
+	n_vecs = key[0][0][0]
+	models = create_data_model( key, int( n_vecs**self.subsample_len_exp ) )
+	vars['seq_type'] = 'ndarray'
+#	vars['arg_model'] = models
         vars['n_subsamples'] = self.num_subsamples
         vars['n_bootstraps'] = self.num_bootstraps
 

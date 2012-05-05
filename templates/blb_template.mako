@@ -1,3 +1,4 @@
+
 <%doc>
 USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
   Templating variables in use:
@@ -10,24 +11,9 @@ USING ARRAYS OF INDICIES INSTEAD OF COPPYING DATA
   subsmaple_threshold: the probability parameter for the subsample rng
   seq_type: The python type of the data sequence, should be list or ndarray
 </%doc>
-typedef ${scalar_type} scalar_t;
-##define scalar_t ${scalar_type}
-#define NPY_SCALAR ${ 'NPY_FLOAT32' if scalar_type is 'float' else 'NPY_FLOAT64' }
-void printArray( scalar_t*, int, int );
+
+#define NPY_SCALAR ${ 'NPY_FLOAT32' if average_model.scalar_t.ctype() is 'float' else 'NPY_FLOAT64' }
 void printArray( unsigned int*, int, int );
-
-<%def name="bigrand( fname )">
-inline unsigned long ${fname}( unsigned int* seed ){
-        unsigned long ret = rand_r(seed);
-        return ((ret << 32) | rand_r(seed));
-}
-</%def>
-
-<%def name="littlerand( fname )">
-inline unsigned int ${fname}( unsigned int* seed ){
-    return rand_r(seed);
-}
-</%def>
 
 void bootstrap( unsigned int* out, gsl_rng* rng ){
   double norm = ${ vec_n*(1.0/vec_n) };
@@ -50,15 +36,39 @@ void bootstrap( unsigned int* out, gsl_rng* rng ){
 
 }
 
+<%doc>
 void subsample_and_load( scalar_t* data, scalar_t* out, gsl_rng* rng ){
         for( int i = 0; i<${vec_n}; i++ ){
 	    unsigned int index = gsl_rng_get(rng) % ${n_vecs};
             vvc( data+(${dim}*index), out+(i*${dim}), ${dim} );
         }
 }
+</%doc>
 
+<%
+    data_args = [ '%s* data%d' % ( arg_model[i].scalar_t.ctype(), i ) for i in range(len(arg_model) ) ]
+    out_args = [ '%s* out%d' % ( arg_model[i].scalar_t.ctype(), i ) for i in range(len(arg_model)) ]
+%> 
+void subsample_and_load( ${ ', '.join( data_args + out_args  )}, gsl_rng* rng ){
+        for( int i = 0; i<${vec_n}; i++ ){
+	    unsigned int index = gsl_rng_get(rng) % ${n_vecs};
+%for i in range(len(arg_model)):
+    %if len(arg_model[i].dimensions) == 1:
+	    out${i}[i] = data${i}[index];
+    %else:
+        <% dim = arg_model[i].dimensions[1]  %>
+	memcpy(out${i} + (i*${dim}), data${i} + index*${dim}, ${dim}*sizeof(${arg_model[i].scalar_t.ctype()}) );
+    %endif
+%endfor
+        }
+}
 
-
+int check_nans( double* data, int n ){
+    for( int i = 0; i<n; i++ ){
+	if( data[i] != data[i] ) return 1;
+    }
+    return 0;
+}
 ## list is the default type.
 %if seq_type == 'list':
 
@@ -69,69 +79,83 @@ PyObject* compute_blb( PyObject*  data ){
     scalar_t * c_arr = (scalar_t*) PyArray_DATA( py_arr );
 
 %elif seq_type == 'ndarray':
+PyObject* compute_blb( ${ ', '.join( [ 'PyObject* arg%d' % i for i in range(len(arg_model)) ] ) } ){
+//  printf("Made it into C\n");
+%for i in range(len(arg_model)):
+  <% argname = 'arg' + str(i) %>	
+  Py_INCREF( ${argname} );
+  ${arg_model[i].scalar_t.ctype()} * c_arr${i} = (${arg_model[i].scalar_t.ctype()}*) PyArray_DATA( ${argname} );
 
-PyObject* compute_blb( PyObject* data ){
-    Py_INCREF( data );
-    scalar_t * c_arr = (scalar_t*) PyArray_DATA( data );
-
+##  printf("c_arr${i} nominal length: ${reduce(int.__mul__, arg_model[i].dimensions )}\n");
+##  printf("actual length: %d\n", PyArray_Size( ${argname} ) );
+%endfor
 %endif
     //note that these are never cleared; We always fill them up
     //with the appropriate data before perform calculations on them.
-    scalar_t * subsample_estimates = (scalar_t*) calloc( ${n_subsamples*subsample_dim}, sizeof(scalar_t) );
-    scalar_t * subsample_values = (scalar_t*) calloc( ${vec_n*dim}, sizeof(scalar_t) );
-    unsigned int * bootstrap_weights = (unsigned int*) calloc( ${vec_n}, sizeof(unsigned int) );
-    scalar_t * bootstrap_estimates = (scalar_t*) calloc( ${n_bootstraps*bootstrap_dim}, sizeof(scalar_t) );
+%for i in range(len(arg_model)):
+    <% 
+	model = arg_model[i]
+        scalar_t = model.scalar_t.ctype() 
+        dim = model.element_size()
+    %>
+    ${scalar_t} * subsample_values${i} = (${scalar_t}*) calloc(${vec_n*dim}, sizeof(${scalar_t}));
+%endfor
+
+    <%  
+	sub_type = subsample_model.scalar_t.ctype() 
+	boot_type = bootstrap_model.scalar_t.ctype()
+    %>	
+
+    ${sub_type}* subsample_estimates = (${sub_type}*) malloc(${n_subsamples*subsample_model.dimension()}*sizeof(${sub_type}));
+    ${boot_type}* bootstrap_estimates = (${boot_type}*) malloc(${n_bootstraps*bootstrap_model.dimension()}*sizeof(${boot_type}));
+    unsigned int* bootstrap_weights = (unsigned int*) malloc(${vec_n}*sizeof(unsigned int)); 
+
     gsl_rng* rng = gsl_rng_alloc(gsl_rng_taus);
     gsl_rng_set( rng, time(NULL) );
 
     for( int i=0; i<${n_subsamples}; i++ ){
-//    	printf("Loading subsample number %d\n", i);
-        subsample_and_load( c_arr, subsample_values, rng );
+	subsample_and_load( ${ ', '.join(['c_arr'+str(i) for i in range(len(arg_model))] + [ 'subsample_values'+str(i) for i in range(len(arg_model)) ]) }, rng);
         for( int j=0; j<${n_bootstraps}; j++ ){
-//	    printf("Computing bootstrap number %d\n", j);
             bootstrap( bootstrap_weights, rng );
-            compute_estimate( subsample_values, bootstrap_weights, ${vec_n}, bootstrap_estimates + j*${bootstrap_dim} );
-	    if( j == 0 ){
-//		printf("Bootstrap_estimate: ");
-//		printArray( bootstrap_estimates + j*${bootstrap_dim}, 0, ${bootstrap_dim} );
+            compute_estimate( ${ ', '.join( [ 'c_arr'+str(i) for i in range(len(arg_model)) ] )}, bootstrap_weights, bootstrap_estimates+j*${bootstrap_model.dimension()} );
+	    if( check_nans( bootstrap_estimates+j*${bootstrap_model.dimension()}, ${bootstrap_model.dimension()} ) ){
+		printf("nan detected in subsample %d, bootstrap %d!\n", i, j );
 	    }
-        }
-    reduce_bootstraps( bootstrap_estimates, ${n_bootstraps}, subsample_estimates + i*${subsample_dim} );
-//    printf("Subsample estimates: ");
-//    printArray(subsample_estimates + i*${subsample_dim}, 0, ${subsample_dim});
-    }
-  
-  %if average_dim == 1:
-  scalar_t theta = 0.0;
-  average( subsample_estimates, ${n_subsamples}, &theta );
-  %else:
-  scalar_t* theta = (scalar_t*) calloc( ${average_dim}, sizeof(scalar_t) );
-  average( subsample_estimates, ${n_subsamples}, theta );
-  %endif
-
-  gsl_rng_free(rng);
-  free( subsample_estimates );
-  free( bootstrap_weights );
-  free( bootstrap_estimates );
-  free( subsample_values );
-
-%if seq_type is UNDEFINED or seq_type == 'list':
-  Py_DECREF( py_arr );
-%endif
-  Py_DECREF( data );
-  %if average_dim == 1:
-  return PyFloat_FromDouble( theta );
-  %else:
-  npy_intp dim[1] = { ${average_dim} };
-  return PyArray_SimpleNewFromData( 1, dim  , NPY_SCALAR, theta ); 
-  %endif
 }
+    reduce_bootstraps( bootstrap_estimates, subsample_estimates + i*${subsample_model.dimension()} );
+}
+  
+    gsl_rng_free(rng);
 
-void printArray(scalar_t* arr, int start, int end) {
-     for (int i=start; i<end; i++) {
-     	 printf("%.4f, ", arr[i]);
-     }
-     printf("\n");
+    %if average_model.dimension() == 1:
+    ${average_model.scalar_t.ctype()} theta = (${average_model.scalar_t.ctype()})0;
+    average(subsample_estimates, &theta ); 
+    %else:
+        <% scalar_t = average_model.scalar_t.ctype() %>
+    ${scalar_t}* theta = (${scalar_t}*) malloc( ${average_model.dimension()}*sizeof(${scalar_t}) );
+    average( subsample_estimates, theta );
+    %endif
+
+%for i in range(len(arg_model)):
+    free(subsample_values${i});
+%endfor
+    free(subsample_estimates);
+    free(bootstrap_estimates);
+    free(bootstrap_weights);
+##<% assert False, 'made it through free' %>
+%if seq_type is UNDEFINED or seq_type == 'list':
+    Py_DECREF( py_arr );
+%endif
+%for i in range(len(arg_model)):
+    Py_DECREF( arg${i} );
+%endfor
+##<% assert False, 'made it through decrefs' %>
+    %if average_model.dimension() == 1:
+    return PyFloat_FromDouble( theta );
+    %else:
+    npy_intp dim[1] = { ${average_model.dimension()} };
+    return PyArray_SimpleNewFromData( 1, dim, NPY_SCALAR, theta );
+    %endif
 }
 
 void printArray(unsigned int* arr, int start, int end) {
