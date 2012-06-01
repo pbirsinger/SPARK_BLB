@@ -10,7 +10,7 @@ class SVMVerifierBLB( blb.BLB ):
 	    for model in models:
 		match = dot( model, email )
 		if match > max_match:
-		    choice = index()
+		    choice = index() + 1
 		    max_match = match
 	    if choice != tag:
 		errors += 1

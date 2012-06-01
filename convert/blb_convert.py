@@ -23,14 +23,14 @@ class BLBConverter( ast_tools.ConvertAST ):
     def aggregate_on( self, ag_string ):
 	self.aggregates.append( ag_string )
 	for model in self.data_model.itervalues():
-	    if model.should_declare():
-   	        model.weight_with( ag_string )
+	    #if model.should_declare():
+   	    model.weight_with( ag_string )
 
     def aggregate_off( self, ag_string ):
 	if ag_string in self.aggregates:
 	    self.aggregates.remove( ag_string )
 	    for model in self.data_model.itervalues():
-		if model.weight_index == ag_string:
+		if ag_string in model.weight_index:
 		    model.weight_with( None )
 
     def get_or_create_model( self, node ):
@@ -100,12 +100,15 @@ class BLBConverter( ast_tools.ConvertAST ):
 	    raise TypeError( 'Expected %d arguments, received %d' % ( len( args ), len( self._data_model ) ) )
 	foo = zip( args, self._data_model )
 	for arg, model in foo:
-	    self.data_model[ arg.name ] = model
-	    model.name = arg.name
-	    ret.append(cpp_ast.Pointer(cpp_ast.Value(model.scalar_t.ctype(), arg.name)))
-	    self.arg_model.append( model )
+   	    model.name = arg.name
 	    model.should_subsample = not ( model.name in annotations and 'nosubsample' in annotations[model.name] )
-	if self.weighted:
+	    if not model.should_subsample and type(model) is not DataModel:
+		model = DataModel.clone( model )
+	        model.dimensions = tuple( [len(model)] + model.dimensions[1:] )    
+	    ret.append(cpp_ast.Pointer(cpp_ast.Value(model.ctype(), arg.name)))
+ 	    self.data_model[ arg.name ] = model
+	    self.arg_model.append( model )
+   	if self.weighted:
 	    ret.append(cpp_ast.Pointer(cpp_ast.Value("const unsigned int", cpp_ast.CName( '_blb_weights' ) ) ) )
 	return ret
 
@@ -216,9 +219,10 @@ class BLBConverter( ast_tools.ConvertAST ):
 	    loopvar = cpp_ast.CName( self.loopvar[-1] )
 	    body = []
 
-	    if self.weighted:
-        	self.aggregate_on( loopvar )	
-	
+	    weight_loop = self.weighted and reduce( lambda a,b: a or b, [ (_iter.name in self.data_model and self.data_model[ _iter.name ].should_subsample ) for _iter in _iters ]	 )
+	    if weight_loop:
+		self.aggregate_on( loopvar )
+
 	    # add the temporary children to the data model
 	    for target, _iter in zip( targets, _iters ):
 		if not (type(_iter) is cpp_ast.CName and _iter.name in self.data_model):
@@ -231,11 +235,13 @@ class BLBConverter( ast_tools.ConvertAST ):
 	        target_model = self.data_model[ target.name ] = parent_model.branch( name = target.name )
  	        ctype = target_model.scalar_t.ctype()
 	        decl = cpp_ast.Value( ctype, target.name ) if target_model.is_scalar() else cpp_ast.Pointer( cpp_ast.Value( ctype, target.name ) ) 
-	        init = cpp_ast.Subscript( _iter, loopvar) if target_model.is_scalar() \
-		   else cpp_ast.BinOp( _iter, '+', cpp_ast.BinOp( loopvar , '*', parent_model.element_size() ) )
+	        init = parent_model.declare_child( target_model, loopvar )
+		#init = cpp_ast.Subscript( _iter, loopvar) if target_model.is_scalar() \
+		#   else cpp_ast.BinOp( _iter, '+', cpp_ast.BinOp( loopvar , '*', parent_model.element_size() ) )
 	        body.append( cpp_ast.Assign( decl, init ) )
 	    
 
+	    
 	    # visit the body of the for
 	    body += [ self.visit( x ) for x in node.body ]
   
@@ -249,7 +255,7 @@ class BLBConverter( ast_tools.ConvertAST ):
 	    self.loopvar = self.loopvar[:-1]
 	    for target in targets:
 	        del self.data_model[ target.name ]
-	    if self.weighted:	
+	    if weight_loop:	
 	        self.aggregate_off( loopvar )
 	    # return
 	    return ret

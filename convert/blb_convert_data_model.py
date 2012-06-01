@@ -6,14 +6,15 @@ class DataModel( ast.AST ):
 	self.scalar_t = scalar_type if isinstance( scalar_type, RobustType ) else RobustType( scalar_type )
 	self.dimensions = dimensions
 	self.parent = parent
-	self.weight_index = None
+	self.weight_index = []
 	self.name = name
 	self.index_names = []
 	self.index_multipliers = []
 	self._declare = False
 	self.length = dimensions[0]
 	self.should_subsample = False
-	self._fields = [ 'scalar_t', 'dimensions', 'parent', 'weight_index', 'name', 'index_names', 'index_multipliers', '_declare', 'length', 'should_subsample' ]
+	self.subsample_type = 'LOAD'
+	self._fields = [ 'scalar_t', 'dimensions', 'parent', 'weight_index', 'name', 'index_names', 'index_multipliers', '_declare', 'length', 'should_subsample', 'subsample_type' ]
 
     def __len__( self ):
 	return self.length
@@ -38,6 +39,9 @@ class DataModel( ast.AST ):
 	    child.index_multipliers.append( self.element_size() ) 
 	return child
 
+    def ctype( self ):
+	return self.scalar_t.ctype()
+
     def is_scalar( self ):
 	return (len( self.dimensions ) == 1) and (self.dimensions[0] == 1) 
 	     
@@ -48,7 +52,10 @@ class DataModel( ast.AST ):
 	print self.index_multipliers
 
     def weight_with( self, index ):
-	self.weight_index = index  
+	if index is None:
+	    self.weight_index.pop()
+	else:
+	    self.weight_index.append(index)  
 
     def declare( self, converter ):
 	""" Returns a c++ statement declaring this object. """
@@ -57,6 +64,12 @@ class DataModel( ast.AST ):
 	else:
 	    self._declare = True
 	    return cpp_ast.Expression()
+
+    def declare_child( self, child, idx ):
+	if child.is_scalar():
+            return cpp_ast.Subscript( self.ref_name(), idx )
+	else:
+	    return cpp_ast.BinOp( cpp_ast.CName(self.ref_name()), '+', cpp_ast.BinOp( idx, '*', self.element_size() ) )
 
     def dimension( self ):
 	return self.dimensions[0]
@@ -68,7 +81,7 @@ class DataModel( ast.AST ):
 	    return reduce( int.__mul__, self.dimensions[1:]  )
 
     def is_weighted( self ):
-	return self.weight_index is not None
+	return len(self.weight_index) > 0
 
     def get_weight( self ):
 	return self.weight_index[0] if hasattr(self.weight_index, '__iter__') else self.weight_index
@@ -93,8 +106,17 @@ class DataModel( ast.AST ):
     def should_declare( self ):
 	return self._declare
 
+    def subsample_method( self, idx = 'i' ):
+	name = self.ref_name()
+	dim = self.element_size()
+	if self.is_scalar():
+	    return "%s_out[%s] = %s_data[index];" % ( name, idx, name )
+	else:
+	    return "memcpy( %s_out+(%s*%d), %s_data+(index*%d), %d*sizeof(%s) );" % ( name, idx, dim, name, dim, dim, self.ctype() )
+
     def size( self ):
 	return reduce( int.__mul__, self.dimensions )
+
     def clone( self ):
 	_clone = DataModel( self.scalar_t, [1], self.parent, self.name )
 	for field in self._fields:
@@ -138,7 +160,37 @@ class DataModelView( DataModel ):
     def should_declare( self ):
 	return ( self.base.name == "" ) and self.base.should_declare()
 
+
+class IndirectDataModel( DataModel ):
+    
+    def branch( self, idx=None, name="" ):
+	_name = name if name else '(%s[%s])' % ( self.name, index ) 
+	child = DataModel( self.scalar_t, self.dimensions[1:], self, _name )
+	return child
+
+    def declare_child( self, child, idx ):
+	return cpp_ast.Subscript( cpp_ast.CName( self.ref_name() ), idx )
+    
+    def ctype( self ):
+	return '%s*' % self.scalar_t.ctype()
+
+    def subsample_method( self, idx = 'i' ):
+	name = self.ref_name()
+	dim = reduce( int.__mul__, self.dimensions[1:] ) if len( self.dimensions ) > 1 else 1
+	return "%s_out[%s] = %s_data+(%d*index);" % ( name, idx, name, dim )
+ 
+    def element_size( self ):
+	return 1 
+
+    def clone( self ):
+	_clone = IndirectDataModel( self.scalar_t, [1], self.parent, self.name )
+	for field in self._fields:
+	    setattr( _clone, field, getattr( self, field ) )
+	_clone.dimensions = self.dimensions[:]
+	return _clone
+
 class ReturnModel( DataModel ):
+
     def __init__( self, scalar_type, dimension ):
 	DataModel.__init__( self, scalar_type, dimension if type(dimension) is list else [dimension], None, '_blb_result' )
 
@@ -166,11 +218,14 @@ def register_robust_type( tp_tuple ):
 def get_type_aliases( tp ):
     return __ALIAS_CATALOGUE[ tp ]
 
+register_robust_type( ( 'unsigned char', numpy.dtype('uint8'), int, 1 ) )
+register_robust_type( ( 'char', numpy.dtype('int8'), int, 1 ) )
 register_robust_type( ( 'int', numpy.dtype('int32'), int, 4 ) )
 register_robust_type( ( 'float', numpy.dtype('float32'), float, 4 ) )
 register_robust_type( ( 'double', numpy.dtype('float64'), float, 8 ) )
 register_robust_type( ( 'long', numpy.dtype('int64'), long, 8 ) )
 
+ 
 class RobustType( object ):
     def __init__( self, tp ):
 	self.aliases = get_type_aliases( tp )

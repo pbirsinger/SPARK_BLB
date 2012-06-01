@@ -8,6 +8,7 @@ import numpy
 import asp.config
 import inspect, ast
 from convert.blb_convert import BLBConverter, create_data_model
+import convert.blb_convert_data_model as data_model
 from blb_setup import gslroot, cache_dir
 
 	
@@ -77,6 +78,24 @@ class BLB:
 	    mod.backends["c++"].compile()
 	    self.cached_mods[key] = mod
 
+    def create_input_model( self, key, vec_n ):
+	#Subsample and load cutoff size
+	cutoff = 10*1024*1024
+	models = []
+	for k in key:
+	    print k
+	    size = reduce( int.__mul__, k[0][1:] ) if len(k[0]) > 1 else 1
+	    size *= vec_n
+	    model = None
+	    if size <= cutoff:
+		model = data_model.DataModel( k[1], list(k[0]) ) 
+	    else:
+		model = data_model.IndirectDataModel( k[1], list(k[0]) )
+	    model.set_len( k[0][0] )
+	    model.dimensions[0] = vec_n
+	    models.append( model )
+	return models
+	    
     def build_mod(self, key):
         template_name = ''
         if self.with_openMP:
@@ -105,7 +124,7 @@ class BLB:
 	impl_args['scalar_type'] = 'double'
 
 
-	estimate_converter = BLBConverter( create_data_model(key, vec_n), input_size=vec_n, weighted=True )
+	estimate_converter = BLBConverter( self.create_input_model(key, vec_n), input_size=vec_n, weighted=True )
 	estimate_cpp = estimate_converter.render( self.estimate_ast )
 	impl_args['classifier'] = estimate_cpp
 	impl_funcs.extend( estimate_converter.desired_funcs )

@@ -1,8 +1,67 @@
-Will flesh out this document later. 
+Thank you for using the UC Berkeley BLB Specializer. For more information on this 
+specializer and the ASP project, please visit http://www.sejits.org. This document
+describes the basic steps neccessary to install and use the UC Berkeley BLB
+Specializer.
 
-BLB.py contains the BLB class that all subclasses should inherit from.
-Subclasses will provide specific reducing functions for each loop of the
-algorithm.
+1. Prerequisites
+2. Installation and Setup
+3. Verifying your installation
+4. Running your first specialized program
 
-run_test.py has sample implementations for mean and standard deviations and
-executes them on a list of 10000 items.
+1. PREREQUISITES
+
+    The UC Berkeley BLB Specializer relies upon several other software packages in order
+to function. Please verify that these are installed and working correctly on your machine
+before attempting to install this specializer.
+
+0) A Unix based operating system
+    See sejits.org for information about using ASP on a non unix-y platform.
+
+i) Python 2.6.x
+    ASP SEJITS is designed to work with the 2.6 series of python releases. This specializer
+and the libraries it relies upon may not function with other versions of python. See
+http://www.python.org for information and to download python.
+
+ii) The ASP Framework
+    This package contains functions common to all ASP specializers, and is needed by this 
+specializer to function. See sejits.org for information on installing the ASP framework.
+
+iii) Gnu Scientific Library
+    The Gnu Scientific Library may or may not be used for certain specialized operations,
+but is necessary for the specializer to function properly. This specializer was tested against
+GSL 1.15. For information and to get GSL, please visit http://www.gnu.org/s/gsl.
+
+2. INSTALLATION AND SETUP
+
+    Preparing the UC Berkeley BLB Specializer for use involves three steps: Acquiring the source
+files, altering the appropriate environment variables, and writing the configuration files.
+
+ACQUIRING THE SOURCE 
+
+The most recent relase build of this specializer is available at 
+https://github.com/shoaibkamil/asp/tree/master/specializers/BLB
+
+This is a git repository, and may be clones as such.
+
+SETTING ENVIRONMENT VARIABLES
+
+For easy use of this specializer, please ensure that the directory containing the compiled GSL
+binary is on your LD_LIBRARY_PATH, and that the root directory of your specializer installation
+(the one containing this document) is on your PYTHONPATH.
+
+WRITING THE CONFIGURATION FILE
+
+The UC Berkeley BLB Specializer requires some information about your sustem to function properly.
+You should createa file in your root BLB directory named blb_setup.py with the following contents:
+
+- gslroot = "/path/to/gsl/header_files"
+  The specializer needs to know where to find the gsl header files.
+- cache_dir = "/path/to/cgen/cache"
+  The specializer caches modules it has already compiled in this directory, so that it does
+  not have to re-compile for cases it has already seen.
+
+An example of a properly formatted blb_setup.py is located in blb_setup_EXAMPLE.txt.
+
+3. VERIFYING YOUR INSTALLATION
+
+

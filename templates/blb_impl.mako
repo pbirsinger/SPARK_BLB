@@ -171,25 +171,25 @@ void _blb_outer_product( double* const u, ${ 'const unsigned int a,' if args[1] 
 </%def>
 
 <%def name="_blb_PLUS_MACRO( args )" >
-#define _blb_PLUS_MACRO( right, left, a, res ) res = (${args[0]})(left + a*right)
+#define _blb_PLUS_MACRO( left, right, a, res ) res = (left + a*right)
 </%def>
 
 <%def name="_blb_MINUS_MACRO( args )" >
-#define _blb_MINUS_MACRO( right, left, a, res ) res = (${args[0]})(left - a*right)
+#define _blb_MINUS_MACRO( left, right, a, res ) res = (left - a*right)
 </%def>
 
 <%def name="_blb_MULT_MACRO( args )" >
-#define _blb_MULT_MACRO( right, left, a, res ) res = (${args[0]})a*left*right
+#define _blb_MULT_MACRO( left, right, a, res ) res = (a*left*right)
 </%def>
 
 <%def name="_blb_DIV_MACRO( args )" >
-#define _blb_DIV_MACRO( right, left, a, res ) res = (${args[0]})(left/(a*right))
+#define _blb_DIV_MACRO( left, right, a, res ) res = (left/(a*right))
 </%def>
 
 <%def name="_blb_dot( args )">
 void _blb_dot( ${args[0]}* v, ${args[1]}* u, ${args[2]}* out, unsigned int n ){
     ${args[2]} x = 0;
-    for( unsigned int i; i<n; i++ ){
+    for( unsigned int i=0; i<n; i++ ){
 	x += v[i]*u[i];
     }
     *out = x;
