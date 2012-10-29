@@ -11,7 +11,7 @@ import asp.config
 import inspect, ast
 
 #from blb_convert import BLBConverter
-from blb_setup import gslroot, cache_dir
+#from blb_setup import gslroot, cache_dir
 
 def combine(blb_funcs):
     parent = (open('blb_core_parallel.scala')).read()  

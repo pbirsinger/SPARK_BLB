@@ -1,7 +1,7 @@
 #!/bin/bash
 
 PYTHONPATH=../../:$PYTHONPATH
-PYTHONPATH=~/sejits/asp:$PYTHONPATH
+PYTHONPATH=~/asp:$PYTHONPATH
 
 echo PYTHONPATH
 echo ${PYTHONPATH}

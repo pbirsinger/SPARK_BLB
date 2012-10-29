@@ -2,7 +2,7 @@ import unittest
 
 from blb import BLB
 
-from avroInter.PyAvroInter import *
+from asp.avro_inter.py_avro_inter import *
 
 class SVMVerifierBLB(BLB):
     def compute_estimate(btstrap_data):
