@@ -1,8 +1,8 @@
 
 import asp.jit.asp_module as asp_module
-import avroInter.avro_backend as avro_backend    
+import asp.avroInter.avro_backend as avro_backend    
 import asp.codegen.ast_tools as ast_tools
-from asp.codegen.codegenScala import *
+from asp.codegen.codegen_scala import *
 import ast
 
 import random
@@ -55,7 +55,7 @@ class BLB:
         if self.pure_python:
             self.run_python(data)
         elif self.use_scala: 
-            self.run_cloud(data)
+            self.run_distributed(data)
         else: #run local c++ 
             f = self.fingerprint(data)
             mod = None
@@ -79,7 +79,7 @@ class BLB:
             subsample_estimates.append(subsample_est)
         return self.average(subsample_estimates)
     
-    def run_cloud(self,data): 
+    def run_distributed(self,data): 
         mod = asp_module.ASPModule(cache_dir = "/root/spark/examples/target/scala-2.9.1.final/classes/", use_scala=True)
                                                                   
         scala_estimate= ast_tools.ConvertPyAST_ScalaAST().visit(self.estimate_ast) 
