@@ -1,6 +1,6 @@
 
 import asp.jit.asp_module as asp_module
-import asp.avroInter.avro_backend as avro_backend    
+import asp.avro_inter.avro_backend as avro_backend    
 import asp.codegen.ast_tools as ast_tools
 from asp.codegen.codegen_scala import *
 import ast
