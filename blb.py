@@ -24,12 +24,13 @@ class BLB:
     known_reducers= ['mean', 'stdev', 'mean_norm', 'noop']
     def __init__(self, num_subsamples=25, num_bootstraps=100, 
                  subsample_len_exp=0.5, with_cilk=False, with_openMP=False,
-	   	 dimension=1, pure_python=False, use_scala=False):
+	   	 dimension=1, pure_python=False, with_scala=False):
 
         self.dim = dimension
         self.with_cilk=with_cilk
 	self.with_openMP = with_openMP
 	self.pure_python= pure_python
+	self.with_scala = with_scala
 
         self.estimate_src = inspect.getsource(self.compute_estimate)
         self.estimate_ast = ast.parse(self.estimate_src.lstrip())
@@ -67,7 +68,7 @@ class BLB:
                 subsample_estimates.append(subsample_est)
 #                print "***PYTHON subsample estimate for subsample " + str(i) + " is " + str(subsample_est)
             return self.average(subsample_estimates)
-	elif self.use_scala:
+	elif self.with_scala:
 	    self.run_distributed(data)
         else:
             f = self.fingerprint(data)
