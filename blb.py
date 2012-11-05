@@ -5,7 +5,7 @@ Main class representing the BLB algorithm.
 
 import random
 import numpy
-import asp.config
+#import asp.config
 import inspect, ast
 from convert.blb_convert import BLBConverter, create_data_model
 import convert.blb_convert_data_model as data_model
@@ -56,21 +56,9 @@ class BLB:
 
     def run(self, *data):
         if self.pure_python:
-            subsample_estimates = []
-            for i in range(self.num_subsamples):
-                subsample = self.__subsample(data, self.subsample_len_exp)
-                bootstrap_estimates = [] 
-                for j in range(self.num_bootstraps):
-                    bootstrap = self.__bootstrap(subsample)
-                    estimate = self.compute_estimate(bootstrap)
-                    bootstrap_estimates.append(estimate)
-#                    print "***PYTHON bootstrap estimate for bootstrap " + str(j) + " and subsample " + str(i) + " is " + str(estimate)
-                subsample_est = self.reduce_bootstraps(bootstrap_estimates)
-                subsample_estimates.append(subsample_est)
-#                print "***PYTHON subsample estimate for subsample " + str(i) + " is " + str(subsample_est)
-            return self.average(subsample_estimates)
-	elif self.with_scala:
-	    self.run_distributed(data)
+            self.run_python(data)
+    	elif self.with_scala:
+    	    self.run_distributed(data)
         else:
             f = self.fingerprint(data)
             mod = None
@@ -80,7 +68,22 @@ class BLB:
                 mod = self.build_mod(f)
                 self.cached_mods[f] = mod
             return mod.compute_blb(*data)
-
+    
+    def run_python(self, data):
+        subsample_estimates = []
+        for i in range(self.num_subsamples):
+            subsample = self.__subsample(data, self.subsample_len_exp)
+            bootstrap_estimates = [] 
+            for j in range(self.num_bootstraps):
+                bootstrap = self.__bootstrap(subsample)
+                estimate = self.compute_estimate(bootstrap)
+                bootstrap_estimates.append(estimate)
+#                    print "***PYTHON bootstrap estimate for bootstrap " + str(j) + " and subsample " + str(i) + " is " + str(estimate)
+            subsample_est = self.reduce_bootstraps(bootstrap_estimates)
+            subsample_estimates.append(subsample_est)
+#                print "***PYTHON subsample estimate for subsample " + str(i) + " is " + str(subsample_est)
+        return self.average(subsample_estimates)
+    
     def run_distributed(self,data): 
         mod = asp_module.ASPModule(cache_dir = "/root/spark/examples/target/scala-2.9.1.final/classes/", use_scala=True)
                                                                   
