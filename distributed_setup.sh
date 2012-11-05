@@ -57,7 +57,7 @@ cp -r /root/asp/asp/avro_inter/* /root/avro
 
 
 cd /root/BLB/
-chmod +x test.sh
+chmod +x run_dist_tests.sh
 scalac custom_data.scala
 
 chmod +x /root/asp/asp/jit/make_jar
