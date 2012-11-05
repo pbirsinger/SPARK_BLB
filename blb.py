@@ -11,17 +11,27 @@ from convert.blb_convert import BLBConverter, create_data_model
 import convert.blb_convert_data_model as data_model
 from blb_setup import gslroot, cache_dir
 
+import asp.jit.asp_module as asp_module
+import asp.avro_inter.avro_backend as avro_backend    
+import asp.codegen.ast_tools as ast_tools
+from asp.codegen.codegen_scala import *
+import ast
+
+def combine(blb_funcs):
+    parent = (open('blb_core_parallel.scala')).read()  
+    return parent + blb_funcs 
 	
 class BLB:
     known_reducers= ['mean', 'stdev', 'mean_norm', 'noop']
     def __init__(self, num_subsamples=25, num_bootstraps=100, 
                  subsample_len_exp=0.5, with_cilk=False, with_openMP=False,
-	   	 dimension=1, pure_python=False):
+	   	 dimension=1, pure_python=False, with_scala=False):
 
         self.dim = dimension
         self.with_cilk=with_cilk
 	self.with_openMP = with_openMP
 	self.pure_python= pure_python
+	self.with_scala = with_scala
 
         self.estimate_src = inspect.getsource(self.compute_estimate)
         self.estimate_ast = ast.parse(self.estimate_src.lstrip())
@@ -59,6 +69,8 @@ class BLB:
                 subsample_estimates.append(subsample_est)
 #                print "***PYTHON subsample estimate for subsample " + str(i) + " is " + str(subsample_est)
             return self.average(subsample_estimates)
+	elif self.with_scala:
+	    self.run_distributed(data)
         else:
             f = self.fingerprint(data)
             mod = None
@@ -69,6 +81,31 @@ class BLB:
                 self.cached_mods[f] = mod
             return mod.compute_blb(*data)
 
+    def run_distributed(self,data): 
+        mod = asp_module.ASPModule(cache_dir = "/root/spark/examples/target/scala-2.9.1.final/classes/", use_scala=True)
+                                                                  
+        scala_estimate= ast_tools.ConvertPyAST_ScalaAST().visit(self.estimate_ast) 
+        scala_reduce = ast_tools.ConvertPyAST_ScalaAST().visit(self.reduce_ast)
+        scala_average =  ast_tools.ConvertPyAST_ScalaAST().visit(self.average_ast)
+
+        TYPE_DECS = (['compute_estimate', ['BootstrapData'], 'double'],             
+             ['reduce_bootstraps', [('list', 'double')], 'double'],
+             ['average', [('array', 'double')], 'double'])
+                  
+        scala_gen = SourceGenerator(TYPE_DECS)    
+        rendered_scala = scala_gen.to_source(scala_estimate)+'\n' + scala_gen.to_source(scala_reduce) \
+                            +'\n'+ scala_gen.to_source(scala_average)
+                
+        rendered_scala = combine(rendered_scala)
+        rendered = avro_backend.generate_scala_object("run","",rendered_scala)             
+        #NOTE: must append outer to function name above to get the classname 
+        # because of how scala_object created by avro_backend           
+        mod.add_function("run_outer", rendered, backend = "scala")   
+        
+        email_filename = data[0]
+        model_filename = data[1]
+        return mod.run_outer(email_filename, model_filename, self.dim, self.num_subsamples, self.num_bootstraps, self.subsample_len_exp)  
+ 
     def compile_for( self, key  ):
 	mod = None
 	if key in self.cached_mods:
