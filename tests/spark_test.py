@@ -10,14 +10,14 @@ class SVMVerifierBLB(BLB):
         models = btstrap_data.models
         errors =0.0
         num_emails = 0
-        size = len(models)
+        num_models = len(models)
         for email in emails:
             weight = email.get_weight()
             num_emails += weight
             tag = email.get_tag()
             choice = 0
             max_match = -1.0
-            for i in range(size):
+            for i in range(num_models):
                 model = models[i]  
                 total = custom_dot(model, email)
                 if total > max_match:
@@ -56,10 +56,6 @@ class SVMVerifierBLB(BLB):
 
 
 class SVMVerifierBLBTest(unittest.TestCase):
-    mean = "return arr.reduce(_+_)/arr.length"
-    sd = """val mean = arr.reduce(_+_)/arr.length
-            return math.sqrt(arr.map(x => (x-mean)*(x-mean)).reduce(_+_))/(arr.length - 1)
-    """
 
     def test(self):
         data = tuple([i*1.0 for i in xrange(5000)])
@@ -67,8 +63,8 @@ class SVMVerifierBLBTest(unittest.TestCase):
            
         result = test_blb.run('s3n://AKIAJVLVU3XLP4GLMFEA:xZtDvTF5z0QYx5pZ8gI9KoSpcPHfKarUiNXDKGhy@halfmilEmail/seq113ktest',\
                               '/root/models/comp113kmodel.avro')
+	#Note: Spark will likely hang after the completion of the calculation and the following line will not be reached
         print 'FINAL RESULT IS:', result  
-        self.assertTrue(abs(result - len(data)/2) < len(data)/90)
 
 if __name__ == '__main__':
     unittest.main()
