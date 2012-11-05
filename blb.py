@@ -105,6 +105,10 @@ class BLB:
         # because of how scala_object created by avro_backend           
         mod.add_function("run_outer", rendered, backend = "scala")   
         
+	#NOTE: must add dependencies in make_dependency_jar so that slave nodes will receive proper files
+	os.system('/root/BLB/distr_support/make_dependency_jar ' + '/root/BLB/distr_support/source.jar')
+	os.environ['FILE_LOC'] = '/root/BLB/distr_support/source.jar'
+
         email_filename = data[0]
         model_filename = data[1]
         return mod.run_outer(email_filename, model_filename, self.dim, self.num_subsamples, self.num_bootstraps, self.subsample_len_exp)  
