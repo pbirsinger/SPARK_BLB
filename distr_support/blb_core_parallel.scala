@@ -82,7 +82,8 @@ def run(email_filename: String, model_filename:String, DIM: Int,
 	System.setProperty("spark.default.parallelism", "32")// probably want to set to num_nodes * num_cores/node
 
 	// FILE_LOC is set to the file_path of the jar containing the necessary files in /asp/jift/scala_module.py 
-	val sc = new SparkContext(System.getenv("MASTER"), "Blb", "/root/spark", List(System.getenv("FILE_LOC")))
+	val sc = new SparkContext(System.getenv("MASTER"), "Blb", "/root/spark", List(System.getenv("SOURCE_LOC"), 
+		System.getenv("DEPEND_LOC")))
 	val bnum_bootstraps = sc.broadcast(num_bootstraps)
 	val bsubsample_len_exp = sc.broadcast(subsample_len_exp)
 	val bnum_subsamples = sc.broadcast(num_subsamples)

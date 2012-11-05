@@ -106,8 +106,8 @@ class BLB:
         mod.add_function("run_outer", rendered, backend = "scala")   
         
 	#NOTE: must add dependencies in make_dependency_jar so that slave nodes will receive proper files
-	os.system('/root/BLB/distr_support/make_dependency_jar ' + '/root/BLB/distr_support/source.jar')
-	os.environ['FILE_LOC'] = '/root/BLB/distr_support/source.jar'
+	os.system('/root/BLB/distr_support/make_dependency_jar ' + '/root/BLB/distr_support/dependencies')
+	os.environ['DEPEND_LOC'] = '/root/BLB/distr_support/dependencies/depend.jar'
 
         email_filename = data[0]
         model_filename = data[1]
