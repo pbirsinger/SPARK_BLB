@@ -18,7 +18,7 @@ from asp.codegen.codegen_scala import *
 import ast
 
 def combine(blb_funcs):
-    parent = (open('blb_core_parallel.scala')).read()  
+    parent = (open('distr_support/blb_core_parallel.scala')).read()  
     return parent + blb_funcs 
 	
 class BLB:
