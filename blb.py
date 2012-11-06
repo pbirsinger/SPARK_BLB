@@ -5,6 +5,7 @@ Main class representing the BLB algorithm.
 
 import random
 import numpy
+import time
 #import asp.config
 import inspect, ast
 from convert.blb_convert import BLBConverter, create_data_model
@@ -106,8 +107,9 @@ class BLB:
         mod.add_function("run_outer", rendered, backend = "scala")   
         
 	#NOTE: must add dependencies in make_dependency_jar so that slave nodes will receive proper files
-	os.system('/root/BLB/distr_support/make_dependency_jar ' + '/root/BLB/distr_support/dependencies')
-	os.environ['DEPEND_LOC'] = '/root/BLB/distr_support/dependencies/depend.jar'
+	time_stamp = str(int(round(time.time() * 1000)))
+	os.system('/root/BLB/distr_support/make_dependency_jar ' + '/root/BLB/distr_support/dependencies' + time_stamp)
+	os.environ['DEPEND_LOC'] = '/root/BLB/distr_support/dependencies/' + time_stamp +'/depend.jar'
 
         email_filename = data[0]
         model_filename = data[1]

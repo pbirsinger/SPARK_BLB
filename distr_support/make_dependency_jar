@@ -1,10 +1,11 @@
 #!/bin/bash
 
-cd $1
+mkdir $1
 cp /root/BLB/distr_support/Email.class $1
 cp /root/BLB/distr_support/BootstrapData.class $1
 cp -r /root/avro/* $1
 
-jar -cf source.jar *
+cd $1
+jar -cf depend.jar *
 
 

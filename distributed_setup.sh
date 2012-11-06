@@ -38,7 +38,7 @@ cd ..
 wget http://jackson.codehaus.org/1.9.6/jackson-all-1.9.6.jar
 unzip jackson-all-1.9.6.jar
 
-echo "export CLASSPATH=\$CLASSPATH:.:/root/avro:/root/spark/core/target/spark-core-assembly-0.4-SNAPSHOT.jar" >> /root/.bash_profile
+echo "export CLASSPATH=\$CLASSPATH:.:/root/avro:/root/BLB/distr_support:/root/spark/core/target/spark-core-assembly-0.4-SNAPSHOT.jar" >> /root/.bash_profile
 echo "export MASTER=master@$(curl -s http://169.254.169.254/latest/meta-data/public-hostname):5050" >> /root/.bash_profile
 source /root/.bash_profile
 
@@ -58,9 +58,10 @@ cp -r /root/asp/asp/avro_inter/* /root/avro
 
 cd /root/BLB/
 chmod +x run_dist_tests.sh
-scalac -d distr_support/ /distr_support/custom_data.scala
+scalac -d distr_support/ distr_support/custom_data.scala
 
-chmod +x /root/asp/asp/jit/make_jar
+chmod +x /root/BLB/distr_support/make_dependency_jar
+chmod +x /root/asp/asp/jit/make_source_jar
 
 
 
