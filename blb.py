@@ -108,7 +108,7 @@ class BLB:
         
 	#NOTE: must add dependencies in make_dependency_jar so that slave nodes will receive proper files
 	time_stamp = str(int(round(time.time() * 1000)))
-	os.system('/root/BLB/distr_support/make_dependency_jar ' + '/root/BLB/distr_support/dependencies' + time_stamp)
+	os.system('/root/BLB/distr_support/make_dependency_jar ' + '/root/BLB/distr_support/dependencies/' + time_stamp)
 	os.environ['DEPEND_LOC'] = '/root/BLB/distr_support/dependencies/' + time_stamp +'/depend.jar'
 
         email_filename = data[0]
